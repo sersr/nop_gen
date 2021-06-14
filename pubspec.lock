@@ -297,7 +297,7 @@ packages:
       path: "."
       ref: HEAD
       resolved-ref: e704d1da1c8697de7c4bb741ed5b37d825004285
-      url: "https://github.com/sersr/nop_annotations.git"
+      url: "https://github.com/sersr/nop_annotations"
     source: git
     version: "0.0.1"
   nop_db:
@@ -305,8 +305,8 @@ packages:
     description:
       path: "."
       ref: HEAD
-      resolved-ref: "619e730af9bf8530f0467ef7dc79b4d8d9cae229"
-      url: "https://github.com/sersr/nop_db.git"
+      resolved-ref: "758da8dbbd27e4dedf3e76c1ed3ce6788ecb3b24"
+      url: "https://github.com/sersr/nop_db"
     source: git
     version: "0.0.1"
   package_config:
