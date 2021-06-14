@@ -1,0 +1,24 @@
+targets:
+  $default:
+    builders:
+      nop_db_gen:
+        generate_for:
+          - test/*
+      nop_db_gen:nop_isolate_event:
+        generate_for:
+          - test/*
+builders:
+  nop_db_gen:
+    import: "package:nop_db_gen/builder/builder.dart"
+    builder_factories: ["nopBuilder"]
+    build_extensions: { ".dart": ["nop.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
+  nop_isolate_event:
+    import: "package:nop_db_gen/builder/isolate_event_builder.dart"
+    builder_factories: ["isolateEventBuilder"]
+    build_extensions: { ".dart": ["isolte_event_nop.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
