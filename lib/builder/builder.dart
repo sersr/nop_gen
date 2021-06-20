@@ -130,29 +130,13 @@ final writeOver = '\n@override\n';
 String genTable(List<_ColumnInfo> columnInfos, String className) {
   final buffer = StringBuffer();
 
-  // final _par = columnInfos.map((e) => '${e.type} ${e.name}').join(',');
-
-  // final _parsup = columnInfos.map((e) => '${e.name}: ${e.name}').join(',');
-
   final _parItem = columnInfos.map((e) => e.name).toList();
 
-  // final _parMap = columnInfos.map((e) {
-  //   if (e.isBool)
-  //     return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
-  //   return '${e.name}: map[\'${e.nameDb}\'] as ${e.type}';
-  // }).join(',');
   final _toMap = columnInfos.map((e) => '\'${e.nameDb}\': ${e.name}').join(',');
   buffer
     ..write('extension ${className}Ext on $className {\n')
-    // ..write('_$_className({\n')
-    // ..write('$_par}):')
-    // ..write('super($_parsup);\n\n')
-    // ..write('static $_className _toTable(Map<String,dynamic> map) =>\n')
-    // ..write(' $className($_parMap);\n')
-    // ..write(writeOver)
     ..write('Map<String,dynamic> toJson(){\n')
     ..write('return {$_toMap};\n}\n')
-    // ..write(writeOver)
     ..write('List get _allItems =>List.of($_parItem,growable:false);\n')
     ..write('}\n');
 
@@ -240,21 +224,33 @@ final statements = ['QueryStatement', 'UpdateStatement', 'InsertStatement'];
 String genStatement(List<_ColumnInfo> columnInfos, String userTableName,
     String databaseTableName) {
   final buffer = StringBuffer();
-  // for (final s in statements) {
+  String lowTableName;
+  if (databaseTableName.contains('_Gen'))
+    lowTableName =
+        '${userTableName[0].toLowerCase()}${userTableName.substring(1)}';
+  else
+    lowTableName =
+        '${databaseTableName[0].toLowerCase()}${databaseTableName.substring(1)}';
   buffer
     ..write(
         'extension ItemExtension$userTableName<T extends ItemExtension<$userTableName, $databaseTableName,T>> on T {\n');
-  // ..write(
-  //     'QueryStatement$userTableName($databaseTableName table, \$Database db) : super(table,db);\n')
-  // ..write(writeOver)
-  // ..write(
-  //     'QueryStatement$userTableName item(String v) => super.item(v) as QueryStatement$userTableName;\n\n');
+
   final _items =
       columnInfos.map((e) => 'T get ${e.name} => item(table.${e.name}); \n');
+  final _tableItems = columnInfos
+      .map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
   buffer
     ..writeAll(_items, '\n')
-    ..write('}\n');
-  // }
+    ..writeAll(_tableItems, '\n')
+    ..write('}\n\n');
+  final _joinTableItems = columnInfos.map((e) =>
+      'S get ${lowTableName}_${e.name} => tableItem(\'\${joinTable.table}.\${joinTable.${e.name}}\'); \n');
+  buffer
+    ..write(
+        'extension JoinItem$userTableName<S extends JoinItem<Table, DatabaseTable, $databaseTableName,S>> on S{\n')
+    ..writeAll(_joinTableItems, '\n')
+    ..write('}\n\n');
+
   return buffer.toString();
 }
 
