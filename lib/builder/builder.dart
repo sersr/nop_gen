@@ -150,7 +150,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
 
   buffer
     ..write(
-        'class $databaseTableName extends DatabaseTable<$userTableName> {\n')
+        'class $databaseTableName extends DatabaseTable<$userTableName, $databaseTableName> {\n')
     ..write('$databaseTableName(\$Database db) : super(db);\n')
     // getter: table
     ..write(writeOver)
@@ -164,29 +164,29 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   buffer..write('\n');
   // query
 
-  buffer
-    ..write(writeOver)
-    ..write('QueryStatement<$userTableName, $databaseTableName> get query =>\n')
-    ..write(
-        'QueryStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-  buffer
-    ..write(writeOver)
-    ..write(
-        'UpdateStatement<$userTableName, $databaseTableName> get update =>\n')
-    ..write(
-        'UpdateStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-  buffer
-    ..write(writeOver)
-    ..write(
-        'InsertStatement<$userTableName, $databaseTableName> get insert =>\n')
-    ..write(
-        'InsertStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-  buffer
-    ..write(writeOver)
-    ..write(
-        'DeleteStatement<$userTableName, $databaseTableName> get delete =>\n')
-    ..write(
-        'DeleteStatement<$userTableName, $databaseTableName>(this,db); \n\n');
+  // buffer
+  //   ..write(writeOver)
+  //   ..write('QueryStatement<$userTableName, $databaseTableName> get query =>\n')
+  //   ..write(
+  //       'QueryStatement<$userTableName, $databaseTableName>(this,db); \n\n');
+  // buffer
+  //   ..write(writeOver)
+  //   ..write(
+  //       'UpdateStatement<$userTableName, $databaseTableName> get update =>\n')
+  //   ..write(
+  //       'UpdateStatement<$userTableName, $databaseTableName>(this,db); \n\n');
+  // buffer
+  //   ..write(writeOver)
+  //   ..write(
+  //       'InsertStatement<$userTableName, $databaseTableName> get insert =>\n')
+  //   ..write(
+  //       'InsertStatement<$userTableName, $databaseTableName>(this,db); \n\n');
+  // buffer
+  //   ..write(writeOver)
+  //   ..write(
+  //       'DeleteStatement<$userTableName, $databaseTableName> get delete =>\n')
+  //   ..write(
+  //       'DeleteStatement<$userTableName, $databaseTableName>(this,db); \n\n');
 
   buffer..write(writeOver)..write('String createTable() {\n');
   final members = columnInfos.map((e) {
@@ -233,21 +233,24 @@ String genStatement(List<_ColumnInfo> columnInfos, String userTableName,
         '${databaseTableName[0].toLowerCase()}${databaseTableName.substring(1)}';
   buffer
     ..write(
-        'extension ItemExtension$userTableName<T extends ItemExtension<$userTableName, $databaseTableName,T>> on T {\n');
+        'extension ItemExtension$userTableName<T extends ItemExtension<$databaseTableName>> on T {\n');
 
   final _items =
-      columnInfos.map((e) => 'T get ${e.name} => item(table.${e.name}); \n');
+      columnInfos
+      .map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');
   final _tableItems = columnInfos
       .map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
   buffer
     ..writeAll(_items, '\n')
+    ..write('\n\n')
     ..writeAll(_tableItems, '\n')
     ..write('}\n\n');
+
   final _joinTableItems = columnInfos.map((e) =>
-      'S get ${lowTableName}_${e.name} => tableItem(\'\${joinTable.table}.\${joinTable.${e.name}}\'); \n');
+      'J get ${lowTableName}_${e.name} => joinItem(joinTable.${e.name}) as J; \n');
   buffer
     ..write(
-        'extension JoinItem$userTableName<S extends JoinItem<Table, DatabaseTable, $databaseTableName,S>> on S{\n')
+        'extension JoinItem$userTableName<J extends JoinItem<$databaseTableName>> on J{\n')
     ..writeAll(_joinTableItems, '\n')
     ..write('}\n\n');
 
