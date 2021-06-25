@@ -211,7 +211,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     ..write('$userTableName _toTable(Map<String,dynamic> map) =>\n')
     ..write(' $userTableName($_parMap);\n')
     ..write(writeOver)
-    ..write('List<$userTableName> toTable(List<Row> query) => ')
+    ..write('List<$userTableName> toTable(Iterable<Row> query) => ')
     ..write('query.map((e)=> _toTable(e)).toList();')
     ..write(writeOver)
     ..write('Map<String,dynamic> toJson($userTableName table) => ')
