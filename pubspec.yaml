@@ -13,9 +13,13 @@ dependencies:
     sdk: flutter
   source_gen: ^1.0.0
   nop_annotations:
-    git: https://github.com/sersr/nop_annotations
+    git: 
+      url: https://github.com/sersr/nop_annotations
+      ref: master
   nop_db:
-    git: https://github.com/sersr/nop_db
+    git: 
+      url: https://github.com/sersr/nop_db
+      ref: master
 dev_dependencies:
   flutter_test:
     sdk: flutter
