@@ -295,7 +295,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: HEAD
+      ref: master
       resolved-ref: e704d1da1c8697de7c4bb741ed5b37d825004285
       url: "https://github.com/sersr/nop_annotations"
     source: git
@@ -304,11 +304,11 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: HEAD
-      resolved-ref: "758da8dbbd27e4dedf3e76c1ed3ce6788ecb3b24"
+      ref: master
+      resolved-ref: e6b5aaba726f8ab15c8f87d9f49950ad84095bc5
       url: "https://github.com/sersr/nop_db"
     source: git
-    version: "0.0.1"
+    version: "0.0.4"
   package_config:
     dependency: transitive
     description:
@@ -397,7 +397,7 @@ packages:
       name: sqlite3_flutter_libs
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "0.4.3"
+    version: "0.5.0"
   sqlite3_library_windows:
     dependency: transitive
     description:

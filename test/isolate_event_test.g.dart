@@ -8,28 +8,19 @@ part of 'isolate_event_test.dart';
 
 enum EventOOOneMessage { doOne, doOneWtw }
 enum EventTwoTMessage { doTwoTa, doTwoParT }
-enum EventTwoTthrewMessage { doTwoT, doTwoParTthrew }
 
 abstract class IsolateMeeResolve extends IsolateTest
-    with
-        Resolve,
-        EventoneResolve,
-        EventTwoResolve,
-        EventTwoTResolve,
-        EventTwoTthrewResolve {
+    with Resolve, EventoneResolve, EventTwoResolve, EventTwoTResolve {
   @override
   bool resolve(m) {
+    if (remove(m)) return true;
     if (m is! IsolateSendMessage) return false;
     return super.resolve(m);
   }
 }
 
 abstract class IsolateMeeMessager extends IsolateTest
-    with
-        EventoneMessager,
-        EventTwoMessager,
-        EventTwoTMessager,
-        EventTwoTthrewMessager {}
+    with EventoneMessager, EventTwoMessager, EventTwoTMessager {}
 
 mixin EventoneResolve on Resolve, Eventone, EventoneOne {
   late final _eventoneResolveFuncList =
@@ -40,11 +31,14 @@ mixin EventoneResolve on Resolve, Eventone, EventoneOne {
     if (resolveMessage is IsolateSendMessage) {
       final type = resolveMessage.type;
       if (type is EventOOOneMessage) {
-        if (_eventoneResolveFuncList.length > type.index) {
-          send(
-              _eventoneResolveFuncList
-                  .elementAt(type.index)(resolveMessage.args),
-              resolveMessage);
+        dynamic result;
+        try {
+          result = _eventoneResolveFuncList
+              .elementAt(type.index)(resolveMessage.args);
+          send(result, resolveMessage);
+        } catch (e) {
+          send(result, resolveMessage, e);
+        } finally {
           return true;
         }
       }
@@ -79,11 +73,14 @@ mixin EventTwoTResolve on Resolve, EventTwoT {
     if (resolveMessage is IsolateSendMessage) {
       final type = resolveMessage.type;
       if (type is EventTwoTMessage) {
-        if (_eventTwoTResolveFuncList.length > type.index) {
-          send(
-              _eventTwoTResolveFuncList
-                  .elementAt(type.index)(resolveMessage.args),
-              resolveMessage);
+        dynamic result;
+        try {
+          result = _eventTwoTResolveFuncList
+              .elementAt(type.index)(resolveMessage.args);
+          send(result, resolveMessage);
+        } catch (e) {
+          send(result, resolveMessage, e);
+        } finally {
           return true;
         }
       }
@@ -106,45 +103,6 @@ mixin EventTwoTMessager implements EventTwoT {
   @override
   Future<String?> doTwoParT(int a) async {
     return send.sendMessage(EventTwoTMessage.doTwoParT, a);
-  }
-}
-
-mixin EventTwoTthrewResolve on Resolve, EventTwoTthrew {
-  late final _eventTwoTthrewResolveFuncList =
-      List<DynamicCallback>.of([_doTwoT_0, _doTwoParTthrew_1], growable: false);
-
-  @override
-  bool resolve(resolveMessage) {
-    if (resolveMessage is IsolateSendMessage) {
-      final type = resolveMessage.type;
-      if (type is EventTwoTthrewMessage) {
-        if (_eventTwoTthrewResolveFuncList.length > type.index) {
-          send(
-              _eventTwoTthrewResolveFuncList
-                  .elementAt(type.index)(resolveMessage.args),
-              resolveMessage);
-          return true;
-        }
-      }
-    }
-    return super.resolve(resolveMessage);
-  }
-
-  Future<String?> _doTwoT_0(args) => doTwoT();
-  Future<String?> _doTwoParTthrew_1(args) => doTwoParTthrew(args);
-}
-
-mixin EventTwoTthrewMessager implements EventTwoTthrew {
-  SendEvent get send;
-
-  @override
-  Future<String?> doTwoT() async {
-    return send.sendMessage(EventTwoTthrewMessage.doTwoT, null);
-  }
-
-  @override
-  Future<String?> doTwoParTthrew(int a) async {
-    return send.sendMessage(EventTwoTthrewMessage.doTwoParTthrew, a);
   }
 }
 

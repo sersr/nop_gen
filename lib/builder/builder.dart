@@ -130,14 +130,14 @@ final writeOver = '\n@override\n';
 String genTable(List<_ColumnInfo> columnInfos, String className) {
   final buffer = StringBuffer();
 
-  final _parItem = columnInfos.map((e) => e.name).toList();
+  // final _parItem = columnInfos.map((e) => e.name).toList();
 
   final _toMap = columnInfos.map((e) => '\'${e.nameDb}\': ${e.name}').join(',');
   buffer
     ..write('extension ${className}Ext on $className {\n')
-    ..write('Map<String,dynamic> toJson(){\n')
+    ..write('Map<String,dynamic> _toJson(){\n')
     ..write('return {$_toMap};\n}\n')
-    ..write('List get _allItems =>List.of($_parItem,growable:false);\n')
+    // ..write('List get _allItems =>List.of($_parItem,growable:false);\n')
     ..write('}\n');
 
   return buffer.toString();
@@ -213,9 +213,9 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     ..write(writeOver)
     ..write('List<$userTableName> toTable(Iterable<Row> query) => ')
     ..write('query.map((e)=> _toTable(e)).toList();')
-    ..write(writeOver)
-    ..write('Map<String,dynamic> toJson($userTableName table) => ')
-    ..write('table.toJson();')
+    // ..write(writeOver)
+    // ..write('Map<String,dynamic> toJson($userTableName table) => ')
+    // ..write('table.toJson();')
     ..write('\n}\n\n');
   return buffer.toString();
 }
