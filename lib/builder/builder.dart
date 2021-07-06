@@ -59,7 +59,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
         if (e is ClassElement) {
           var _userTable = e.name;
           // auto gen
-          var genDbName = '${_userTable}Table';
+          var genDbName = '$_userTable';
           var databaseTable = '_Gen$genDbName';
           for (final medata in e.metadata) {
             final cs = medata.computeConstantValue();
@@ -67,7 +67,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
             final table = cs?.getField('name')?.toStringValue();
             if (table != null && table.isNotEmpty) {
               _userTable = table;
-              genDbName = '${_userTable}Table';
+              genDbName = '$_userTable';
               databaseTable = '_Gen$genDbName';
             }
             if (tbName != null && tbName.isNotEmpty) {
@@ -129,15 +129,23 @@ final writeOver = '\n@override\n';
 
 String genTable(List<_ColumnInfo> columnInfos, String className) {
   final buffer = StringBuffer();
+  final _col = columnInfos.map((e) => 'this.${e.name}');
 
-  // final _parItem = columnInfos.map((e) => e.name).toList();
+  final _parItem = columnInfos
+      .map((e) => '$writeOver' 'final ${e.type} ${e.name};\n')
+      .toList()
+      .join('\n');
 
   final _toMap = columnInfos.map((e) => '\'${e.nameDb}\': ${e.name}').join(',');
   buffer
-    ..write('extension ${className}Ext on $className {\n')
-    ..write('Map<String,dynamic> _toJson(){\n')
+    ..write('class _$className extends $className {\n')
+    ..write('_$className({\n')
+    ..write('${_col.join(',')}')
+    ..write('}):super._();\n\n')
+    ..write(writeOver)
+    ..write('Map<String,dynamic> toJson(){\n')
     ..write('return {$_toMap};\n}\n')
-    // ..write('List get _allItems =>List.of($_parItem,growable:false);\n')
+    ..write(_parItem)
     ..write('}\n');
 
   return buffer.toString();
@@ -235,8 +243,7 @@ String genStatement(List<_ColumnInfo> columnInfos, String userTableName,
     ..write(
         'extension ItemExtension$userTableName<T extends ItemExtension<$databaseTableName>> on T {\n');
 
-  final _items =
-      columnInfos
+  final _items = columnInfos
       .map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');
   final _tableItems = columnInfos
       .map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
