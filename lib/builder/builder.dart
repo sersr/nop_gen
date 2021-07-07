@@ -129,24 +129,30 @@ final writeOver = '\n@override\n';
 
 String genTable(List<_ColumnInfo> columnInfos, String className) {
   final buffer = StringBuffer();
-  final _col = columnInfos.map((e) => 'this.${e.name}');
+  // final _col = columnInfos.map((e) => 'this.${e.name}');
 
-  final _parItem = columnInfos
-      .map((e) => '$writeOver' 'final ${e.type} ${e.name};\n')
-      .toList()
-      .join('\n');
+  // final _parItem = columnInfos
+  //     .map((e) => '$writeOver' 'final ${e.type} ${e.name};\n')
+  //     .toList()
+  //     .join('\n');
 
-  final _toMap = columnInfos.map((e) => '\'${e.nameDb}\': ${e.name}').join(',');
+  final _toMap =
+      columnInfos.map((e) => '\'${e.nameDb}\': table.${e.name}').join(',');
+  // buffer
+  //   ..write('class _$className extends $className {\n')
+  //   ..write('_$className({\n')
+  //   ..write('${_col.join(',')}')
+  //   ..write('}):super._();\n\n')
+  //   ..write(writeOver)
+  //   ..write('Map<String,dynamic> toJson(){\n')
+  //   ..write('return {$_toMap};\n}\n')
+  //   ..write(_parItem)
+  //   ..write('}\n');
   buffer
-    ..write('class _$className extends $className {\n')
-    ..write('_$className({\n')
-    ..write('${_col.join(',')}')
-    ..write('}):super._();\n\n')
-    ..write(writeOver)
-    ..write('Map<String,dynamic> toJson(){\n')
-    ..write('return {$_toMap};\n}\n')
-    ..write(_parItem)
-    ..write('}\n');
+    ..write('Map<String,dynamic> _${className}_toJson($className table){\n')
+    ..write('return {$_toMap};\n}\n');
+  // ..write('}\n\n');
+
 
   return buffer.toString();
 }
