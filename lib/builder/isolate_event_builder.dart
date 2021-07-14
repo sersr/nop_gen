@@ -133,10 +133,11 @@ class IsolateEventGeneratorForAnnotation
     buffer..write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
     if (item.methods.isNotEmpty) {
       buffer
-        ..write('late final _${_n}ResolveFuncList = List<DynamicCallback>.of(')
+        ..write(
+            'late final _${_n}ResolveFuncList = List<DynamicCallback>.unmodifiable(')
         ..write(
             '${List.generate(_funcs.length, (index) => '_${_funcs[index].name}_$index')}')
-        ..write(',growable:false);\n')
+        ..write(');\n')
         ..write(_override)
         ..write('  bool resolve(resolveMessage) {\n')
         ..write('if (resolveMessage is IsolateSendMessage) {\n')

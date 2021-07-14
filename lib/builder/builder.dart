@@ -23,6 +23,10 @@ class _ColumnInfo {
   String? get typeDb => _map[type!.replaceAll('?', '')];
 }
 
+String firstToLower(String s) {
+  return s.substring(0, 1).toLowerCase() + s.substring(1);
+}
+
 class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
   @override
   String generateForAnnotatedElement(
@@ -84,8 +88,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
         }
       });
 
-      final lrealTables = realDbTablesName
-          .map((e) => e.substring(0, 1).toLowerCase() + e.substring(1));
+      final lrealTables = realDbTablesName.map((e) => firstToLower(e));
       // member: _tables
       buffer
         ..write(
@@ -117,7 +120,6 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
       List<_ColumnInfo> columnInfos) {
     final buffer = StringBuffer();
 
-    /// version 2.0-----
     buffer.write(genTable(columnInfos, userTableName));
     buffer.write(genTableDb(columnInfos, userTableName, databaseTableName));
     buffer.write(genStatement(columnInfos, userTableName, databaseTableName));
@@ -153,7 +155,6 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
     ..write('return {$_toMap};\n}\n');
   // ..write('}\n\n');
 
-
   return buffer.toString();
 }
 
@@ -176,33 +177,20 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   buffer.write(c);
   // function: createTable
   buffer..write('\n');
-  // query
+  final _tableName = firstToLower(userTableName);
+  final _u = columnInfos.map((e) =>
+      'if($_tableName.${e.name} != null) update.${e.name}.set($_tableName.${e.name});\n');
+  // update
+  buffer
+    ..write('void update$userTableName(UpdateStatement<$userTableName,')
+    ..write('$databaseTableName> update, $_tableName){')
+    ..write(_u.join('\n'))
+    ..write('}\n\n');
 
-  // buffer
-  //   ..write(writeOver)
-  //   ..write('QueryStatement<$userTableName, $databaseTableName> get query =>\n')
-  //   ..write(
-  //       'QueryStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-  // buffer
-  //   ..write(writeOver)
-  //   ..write(
-  //       'UpdateStatement<$userTableName, $databaseTableName> get update =>\n')
-  //   ..write(
-  //       'UpdateStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-  // buffer
-  //   ..write(writeOver)
-  //   ..write(
-  //       'InsertStatement<$userTableName, $databaseTableName> get insert =>\n')
-  //   ..write(
-  //       'InsertStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-  // buffer
-  //   ..write(writeOver)
-  //   ..write(
-  //       'DeleteStatement<$userTableName, $databaseTableName> get delete =>\n')
-  //   ..write(
-  //       'DeleteStatement<$userTableName, $databaseTableName>(this,db); \n\n');
-
-  buffer..write(writeOver)..write('String createTable() {\n');
+  // createTable
+  buffer
+    ..write(writeOver)
+    ..write('String createTable() {\n');
   final members = columnInfos.map((e) {
     final primaryKey = e.isPrimaryKey ? ' PRIMARY KEY' : '';
     return '\$${e.name} ${e.typeDb}$primaryKey';
@@ -212,7 +200,10 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   final length = 4 + s.length;
   final m = members.join(', ').split(' ');
 
-  buffer..write(s)..write(breakLines(m, length, 8))..write(')\';\n}\n');
+  buffer
+    ..write(s)
+    ..write(breakLines(m, length, 8))
+    ..write(')\';\n}\n');
 
   // function: toTable
   final _parMap = columnInfos.map((e) {
