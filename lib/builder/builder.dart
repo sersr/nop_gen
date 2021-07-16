@@ -183,7 +183,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   // update
   buffer
     ..write('void update$userTableName(UpdateStatement<$userTableName,')
-    ..write('$databaseTableName> update, $_tableName){')
+    ..write('$databaseTableName> update,$userTableName $_tableName){')
     ..write(_u.join('\n'))
     ..write('}\n\n');
 
