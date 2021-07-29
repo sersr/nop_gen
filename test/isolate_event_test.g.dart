@@ -38,9 +38,8 @@ mixin EventoneResolve on Resolve, Eventone, EventoneOne {
           send(result, resolveMessage);
         } catch (e) {
           send(result, resolveMessage, e);
-        } finally {
-          return true;
         }
+        return true;
       }
     }
     return super.resolve(resolveMessage);
@@ -80,9 +79,8 @@ mixin EventTwoTResolve on Resolve, EventTwoT {
           send(result, resolveMessage);
         } catch (e) {
           send(result, resolveMessage, e);
-        } finally {
-          return true;
         }
+        return true;
       }
     }
     return super.resolve(resolveMessage);

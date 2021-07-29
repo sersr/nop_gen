@@ -62,10 +62,10 @@ class IsolateEventGeneratorForAnnotation
       ..write(_resolve)
       ..write('{\n')
       ..write(_override)
-      ..write('bool resolve(m){\n')
-      ..write('if (remove(m)) return true;\n')
-      ..write(' if (m is! IsolateSendMessage) return false;\n')
-      ..write('return super.resolve(m);\n')
+      ..write('bool resolve(resolveMessage){\n')
+      ..write('if (remove(resolveMessage)) return true;\n')
+      ..write(' if (resolveMessage is! IsolateSendMessage) return false;\n')
+      ..write('return super.resolve(resolveMessage);\n')
       ..write('\n}\n}\n');
     final _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
 
@@ -149,11 +149,10 @@ class IsolateEventGeneratorForAnnotation
             'result = _${_n}ResolveFuncList.elementAt(type.index)(resolveMessage.args);\n')
         ..write('send(result, resolveMessage);\n')
         ..write('} catch (e) {\n')
-        ..write('send(result, resolveMessage, e);\n')
-        ..write('}finally{')
+        ..write('send(result, resolveMessage, e);\n}')
         ..write('return true;\n}');
 
-      buffer.write('}}\n');
+      buffer.write('}\n');
       buffer.write('return super.resolve(resolveMessage);\n}');
       var count = 0;
 
