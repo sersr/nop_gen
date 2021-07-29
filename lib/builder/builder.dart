@@ -57,13 +57,13 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
       final realDbTablesName = <String>[];
       final _tablesList = <String>[];
 
-      tables.forEach((element) {
+      for (var element in tables) {
         final e = element?.element;
 
         if (e is ClassElement) {
           var _userTable = e.name;
           // auto gen
-          var genDbName = '$_userTable';
+          var genDbName = _userTable;
           var databaseTable = '_Gen$genDbName';
           for (final medata in e.metadata) {
             final cs = medata.computeConstantValue();
@@ -71,7 +71,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
             final table = cs?.getField('name')?.toStringValue();
             if (table != null && table.isNotEmpty) {
               _userTable = table;
-              genDbName = '$_userTable';
+              genDbName = _userTable;
               databaseTable = '_Gen$genDbName';
             }
             if (tbName != null && tbName.isNotEmpty) {
@@ -86,7 +86,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
 
           _tablesList.add(createTable(_userTable, databaseTable, columnInfos));
         }
-      });
+      }
 
       final lrealTables = realDbTablesName.map((e) => firstToLower(e));
       // member: _tables
@@ -127,7 +127,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
   }
 }
 
-final writeOver = '\n@override\n';
+const writeOver = '\n@override\n';
 
 String genTable(List<_ColumnInfo> columnInfos, String className) {
   final buffer = StringBuffer();
@@ -176,7 +176,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   // members
   buffer.write(c);
   // function: createTable
-  buffer..write('\n');
+  buffer.write('\n');
   final _tableName = firstToLower(userTableName);
   final _u = columnInfos.map((e) =>
       'if($_tableName.${e.name} != null) update.${e.name}.set($_tableName.${e.name});\n');
@@ -196,8 +196,8 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     return '\$${e.name} ${e.typeDb}$primaryKey';
   });
 
-  final s = 'return \'CREATE TABLE \$table (';
-  final length = 4 + s.length;
+  const s = 'return \'CREATE TABLE \$table (';
+  const length = 4 + s.length;
   final m = members.join(', ').split(' ');
 
   buffer
@@ -207,8 +207,9 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
 
   // function: toTable
   final _parMap = columnInfos.map((e) {
-    if (e.isBool)
+    if (e.isBool) {
       return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
+    }
     return '${e.name}: map[\'${e.nameDb}\'] as ${e.type}';
   }).join(',');
 
@@ -230,15 +231,15 @@ String genStatement(List<_ColumnInfo> columnInfos, String userTableName,
     String databaseTableName) {
   final buffer = StringBuffer();
   String lowTableName;
-  if (databaseTableName.contains('_Gen'))
+  if (databaseTableName.contains('_Gen')) {
     lowTableName =
         '${userTableName[0].toLowerCase()}${userTableName.substring(1)}';
-  else
+  } else {
     lowTableName =
         '${databaseTableName[0].toLowerCase()}${databaseTableName.substring(1)}';
-  buffer
-    ..write(
-        'extension ItemExtension$userTableName<T extends ItemExtension<$databaseTableName>> on T {\n');
+  }
+  buffer.write(
+      'extension ItemExtension$userTableName<T extends ItemExtension<$databaseTableName>> on T {\n');
 
   final _items = columnInfos
       .map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');

@@ -102,13 +102,15 @@ class IsolateEventGeneratorForAnnotation
     _funcs.addAll(item.methods);
     final _supers = <String>[];
     final _dynamicItems = <ClassItem>{};
-    if (item.methods.where((element) => element.isDynamic).isNotEmpty)
+    if (item.methods.where((element) => element.isDynamic).isNotEmpty) {
       _dynamicItems.add(item);
+    }
 
     if (!item.separate) {
       _funcs.addAll(item.sparateLists.expand((e) {
-        if (e.methods.where((element) => element.isDynamic).isNotEmpty)
+        if (e.methods.where((element) => element.isDynamic).isNotEmpty) {
           _dynamicItems.add(e);
+        }
         return getMethods(e);
       }));
       _supers.addAll(getSupers(item).whereType<String>());
@@ -116,21 +118,21 @@ class IsolateEventGeneratorForAnnotation
       buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
     }
     final _implements = <String>[];
-    _dynamicItems.forEach((element) {
+    for (var element in _dynamicItems) {
       final name = '${element.className}Dynamic';
       _implements.add(name);
-      buffer..write('abstract class $name implements ${element.className}{\n');
+      buffer.write('abstract class $name implements ${element.className}{\n');
       element.methods.where((element) => element.isDynamic).forEach((e) {
         buffer.write('dynamic ${e.name}Dynamic(${e.parameters.join(',')});');
       });
-      buffer..write('}');
-    });
+      buffer.write('}');
+    }
     final _impl =
         _implements.isEmpty ? '' : 'implements ${_implements.join(',')}';
     final _n =
         '${item.className?[0].toLowerCase()}${item.className?.substring(1)}';
     final su = _supers.isEmpty ? item.className : _supers.join(',');
-    buffer..write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
+    buffer.write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
     if (item.methods.isNotEmpty) {
       buffer
         ..write(
@@ -156,7 +158,7 @@ class IsolateEventGeneratorForAnnotation
       buffer.write('return super.resolve(resolveMessage);\n}');
       var count = 0;
 
-      _funcs.forEach((f) {
+      for (var f in _funcs) {
         final paras = f.parameters.length == 1
             ? 'args'
             : List.generate(f.parameters.length, (index) => 'args[$index]')
@@ -167,17 +169,16 @@ class IsolateEventGeneratorForAnnotation
         // if (f.isDynamic)
         //   buffer.write('dynamic $tranName(${f.parameters.join(',')});\n');
         count++;
-      });
+      }
     }
     buffer.write('\n}\n\n');
 
-    buffer
-      ..write(
-          'mixin ${item.className}Messager implements ${item.className} {\n');
+    buffer.write(
+        'mixin ${item.className}Messager implements ${item.className} {\n');
 
     if (item.methods.isNotEmpty) buffer.write('SendEvent get send;\n\n');
 
-    _funcs.forEach((e) {
+    for (var e in _funcs) {
       final returnType = e.isDynamic ? 'dynamic' : e.returnType;
       final tranName = e.isDynamic ? '${e.name}Dynamic' : e.name;
 
@@ -187,13 +188,12 @@ class IsolateEventGeneratorForAnnotation
       final para = e.parameters.isEmpty
           ? 'null'
           : e.parameters.length == 1
-              ? '${e.parameters.first.split(' ')[1]}'
+              ? e.parameters.first.split(' ')[1]
               : e.parameters.map((e) => e.split(' ')[1]).toList();
       if (e.returnType!.isDartAsyncFuture ||
           e.returnType!.isDartAsyncFutureOr) {
-        buffer
-          ..write(
-              'async {\n return send.sendMessage(${item.messagerType}Message.${e.name},$para);');
+        buffer.write(
+            'async {\n return send.sendMessage(${item.messagerType}Message.${e.name},$para);');
       } else if (e.returnType!.toString().startsWith('Stream')) {
         buffer.write(
             '{\n return send.sendMessageStream(${item.messagerType}Message.${e.name},$para);');
@@ -201,7 +201,7 @@ class IsolateEventGeneratorForAnnotation
         buffer.write('{\n');
       }
       buffer.write('\n}\n\n');
-    });
+    }
 
     buffer.write('}\n\n');
     return buffer.toString();
@@ -228,18 +228,21 @@ class IsolateEventGeneratorForAnnotation
     } else {
       buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
     }
-    if (_funcs.isNotEmpty)
+    if (_funcs.isNotEmpty) {
       buffer
         ..write('enum ${item.messagerType}Message {\n')
         ..write(_funcs.join(','))
         ..write('\n}\n');
+    }
     return buffer.toString();
   }
 
   ClassItem? genSuperType(ClassElement element) {
     if (element.supertype != null &&
-        element.supertype!.getDisplayString(withNullability: false) != 'Object')
+        element.supertype!.getDisplayString(withNullability: false) !=
+            'Object') {
       return gen(element.supertype!.element);
+    }
   }
 
   ClassItem? gen(ClassElement element) {
@@ -279,7 +282,7 @@ class IsolateEventGeneratorForAnnotation
     _item.className ??= element.name;
     _item.messagerType ??= element.name;
 
-    element.methods.forEach((methodElement) {
+    for (var methodElement in element.methods) {
       final method = Methods();
 
       method.name = methodElement.name;
@@ -301,7 +304,7 @@ class IsolateEventGeneratorForAnnotation
       });
 
       _item.methods.add(method);
-    });
+    }
     return _item;
   }
 
