@@ -16,10 +16,12 @@ dependencies:
     git: 
       url: https://github.com/sersr/nop_annotations
       ref: master
+  # nop_db:
+  #   git: 
+  #     url: https://github.com/sersr/nop_db
+  #     ref: master
   nop_db:
-    git: 
-      url: https://github.com/sersr/nop_db
-      ref: master
+    path: ../nop_db
 dev_dependencies:
   flutter_test:
     sdk: flutter

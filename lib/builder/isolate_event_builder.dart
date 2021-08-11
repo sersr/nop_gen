@@ -46,19 +46,22 @@ class IsolateEventGeneratorForAnnotation
 
   String write(ClassItem item) {
     final buffer = StringBuffer();
+    buffer.write(writeMessageEnum(item));
     buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
+
     final className = item.className;
     final _allItems = <String>[];
     // _allItems.addAll(item.sparateLists.map((e) => e.className!));
     _allItems.addAll(item.sparateLists.expand((element) => getTypes(element)));
-
+    if (item.methods.isNotEmpty) _allItems.addAll(getTypes(item));
     final _resolve = _allItems.map((e) => '${e}Resolve').join(',');
     // item.sparateLists.map((e) => '${e.className}Resolve').join(',');
     final _name = rootResolveName == null || rootResolveName!.isEmpty
         ? className
         : rootResolveName;
     buffer
-      ..write('abstract class ${_name}Resolve extends $className with Resolve')
+      ..write(
+          'abstract class ${_name}ResolveMain extends $className with Resolve')
       ..write(_resolve.isEmpty ? '' : ', $_resolve')
       ..write('{\n')
       ..write(_override)
@@ -71,10 +74,11 @@ class IsolateEventGeneratorForAnnotation
 
     buffer
       ..write(
-          'abstract class ${_name}Messager extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} ')
+          'abstract class ${_name}MessagerMain extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} ')
       ..write(_allItemsMessager)
       ..write('{\n')
       ..write('}\n\n');
+    if (item.methods.isNotEmpty) buffer.write(writeItems(item));
     buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
     return buffer.toString();
   }
@@ -122,7 +126,8 @@ class IsolateEventGeneratorForAnnotation
     for (var element in _dynamicItems) {
       final name = '${element.className}Dynamic';
       _implements.add(name);
-      buffer.write('abstract class $name implements ${element.className}{\n');
+      buffer.write('/// implements [${element.className}]\n');
+      buffer.write('abstract class $name {\n');
       element.methods.where((element) => element.isDynamic).forEach((e) {
         buffer.write('dynamic ${e.name}Dynamic(${e.parameters.join(',')});');
       });
@@ -150,9 +155,9 @@ class IsolateEventGeneratorForAnnotation
         ..write('try {\n')
         ..write(
             'result = _${_n}ResolveFuncList.elementAt(type.index)(resolveMessage.args);\n')
-        ..write('send(result, resolveMessage);\n')
+        ..write('receipt(result, resolveMessage);\n')
         ..write('} catch (e) {\n')
-        ..write('send(result, resolveMessage, e);\n}')
+        ..write('receipt(result, resolveMessage, e);\n}')
         ..write('return true;\n}');
 
       buffer.write('}\n');
@@ -173,19 +178,19 @@ class IsolateEventGeneratorForAnnotation
       }
     }
     buffer.write('\n}\n\n');
+    buffer.write('/// implements [${item.className}]\n');
 
-    buffer.write(
-        'mixin ${item.className}Messager implements ${item.className} {\n');
-
-    if (item.methods.isNotEmpty) buffer.write('SendEvent get send;\n\n');
+    buffer.write('mixin ${item.className}Messager {\n');
+    bool writeRoot = item.methods.isNotEmpty;
+    if (writeRoot) buffer.write('SendEvent get sendEvent;\n\n');
 
     for (var e in _funcs) {
       final returnType = e.isDynamic ? 'dynamic' : e.returnType;
       final tranName = e.isDynamic ? '${e.name}Dynamic' : e.name;
 
       buffer
-        ..write(e.isDynamic ? '' : _override)
-        ..write('$returnType $tranName(${e.parameters.join(',')})');
+          // ..write(e.isDynamic ? '' : _override)
+          .write('$returnType $tranName(${e.parameters.join(',')})');
       final para = e.parameters.isEmpty
           ? 'null'
           : e.parameters.length == 1
@@ -194,10 +199,10 @@ class IsolateEventGeneratorForAnnotation
       if (e.returnType!.isDartAsyncFuture ||
           e.returnType!.isDartAsyncFutureOr) {
         buffer.write(
-            'async {\n return send.sendMessage(${item.messagerType}Message.${e.name},$para);');
+            'async {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
       } else if (e.returnType!.toString().startsWith('Stream')) {
         buffer.write(
-            '{\n return send.sendMessageStream(${item.messagerType}Message.${e.name},$para);');
+            '{\n return sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para);');
       } else {
         buffer.write('{\n');
       }
