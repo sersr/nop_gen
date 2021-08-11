@@ -58,7 +58,7 @@ class IsolateEventGeneratorForAnnotation
         ? className
         : rootResolveName;
     buffer
-      ..write('abstract class ${_name}Resolve extends $className Resolve')
+      ..write('abstract class ${_name}Resolve extends $className with Resolve')
       ..write(_resolve.isEmpty ? '' : ', $_resolve')
       ..write('{\n')
       ..write(_override)
