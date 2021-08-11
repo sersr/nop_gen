@@ -58,7 +58,7 @@ class IsolateEventGeneratorForAnnotation
         ? className
         : rootResolveName;
     buffer
-      ..write('abstract class ${_name}Resolve extends $className with Resolve,')
+      ..write('abstract class ${_name}Resolve extends $className Resolve,')
       ..write(_resolve)
       ..write('{\n')
       ..write(_override)
@@ -70,7 +70,8 @@ class IsolateEventGeneratorForAnnotation
     final _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
 
     buffer
-      ..write('abstract class ${_name}Messager extends $className with ')
+      ..write(
+          'abstract class ${_name}Messager extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} ')
       ..write(_allItemsMessager)
       ..write('{\n')
       ..write('}\n\n');
