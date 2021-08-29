@@ -32,7 +32,7 @@ abstract class EventTwoTthrew {
   Future<String?> doTwoParTthrew(int a);
 }
 
-class My extends IsolateMeeMessager {
+class My extends IsolateMeeMessagerMain {
   @override
   Future<String?> doTwoParTthrew(int a) {
     throw UnimplementedError();
@@ -48,6 +48,7 @@ class My extends IsolateMeeMessager {
     return '';
   }
 
+
   @override
-  SendEvent get send => throw UnimplementedError();
+  SendEvent get sendEvent => throw UnimplementedError();
 }

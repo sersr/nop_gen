@@ -6,25 +6,26 @@ part of 'isolate_event_test.dart';
 // Generator: IsolateEventGeneratorForAnnotation
 // **************************************************************************
 
+enum IsolateTestMessage { doOne }
 enum EventOOOneMessage { doOne, doOneWtw }
 enum EventTwoTMessage { doTwoTa, doTwoParT }
 
-abstract class IsolateMeeResolve extends IsolateTest
+abstract class IsolateMeeResolveMain extends IsolateTest
     with Resolve, EventoneResolve, EventTwoResolve, EventTwoTResolve {
   @override
-  bool resolve(m) {
-    if (remove(m)) return true;
-    if (m is! IsolateSendMessage) return false;
-    return super.resolve(m);
+  bool resolve(resolveMessage) {
+    if (remove(resolveMessage)) return true;
+    if (resolveMessage is! IsolateSendMessage) return false;
+    return super.resolve(resolveMessage);
   }
 }
 
-abstract class IsolateMeeMessager extends IsolateTest
+abstract class IsolateMeeMessagerMain extends IsolateTest
     with EventoneMessager, EventTwoMessager, EventTwoTMessager {}
 
 mixin EventoneResolve on Resolve, Eventone, EventoneOne {
   late final _eventoneResolveFuncList =
-      List<DynamicCallback>.of([_doOne_0, _doOneWtw_1], growable: false);
+      List<DynamicCallback>.unmodifiable([_doOne_0, _doOneWtw_1]);
 
   @override
   bool resolve(resolveMessage) {
@@ -35,9 +36,9 @@ mixin EventoneResolve on Resolve, Eventone, EventoneOne {
         try {
           result = _eventoneResolveFuncList
               .elementAt(type.index)(resolveMessage.args);
-          send(result, resolveMessage);
+          receipt(result, resolveMessage);
         } catch (e) {
-          send(result, resolveMessage, e);
+          receipt(result, resolveMessage, e);
         }
         return true;
       }
@@ -49,23 +50,22 @@ mixin EventoneResolve on Resolve, Eventone, EventoneOne {
   Future<String?> _doOneWtw_1(args) => doOneWtw();
 }
 
-mixin EventoneMessager implements Eventone {
-  SendEvent get send;
+/// implements [Eventone]
+mixin EventoneMessager {
+  SendEvent get sendEvent;
 
-  @override
   Stream<String?> doOne() {
-    return send.sendMessageStream(EventOOOneMessage.doOne, null);
+    return sendEvent.sendMessageStream(EventOOOneMessage.doOne, null);
   }
 
-  @override
   Future<String?> doOneWtw() async {
-    return send.sendMessage(EventOOOneMessage.doOneWtw, null);
+    return sendEvent.sendMessage(EventOOOneMessage.doOneWtw, null);
   }
 }
 
 mixin EventTwoTResolve on Resolve, EventTwoT {
   late final _eventTwoTResolveFuncList =
-      List<DynamicCallback>.of([_doTwoTa_0, _doTwoParT_1], growable: false);
+      List<DynamicCallback>.unmodifiable([_doTwoTa_0, _doTwoParT_1]);
 
   @override
   bool resolve(resolveMessage) {
@@ -76,9 +76,9 @@ mixin EventTwoTResolve on Resolve, EventTwoT {
         try {
           result = _eventTwoTResolveFuncList
               .elementAt(type.index)(resolveMessage.args);
-          send(result, resolveMessage);
+          receipt(result, resolveMessage);
         } catch (e) {
-          send(result, resolveMessage, e);
+          receipt(result, resolveMessage, e);
         }
         return true;
       }
@@ -90,20 +90,20 @@ mixin EventTwoTResolve on Resolve, EventTwoT {
   Future<String?> _doTwoParT_1(args) => doTwoParT(args);
 }
 
-mixin EventTwoTMessager implements EventTwoT {
-  SendEvent get send;
+/// implements [EventTwoT]
+mixin EventTwoTMessager {
+  SendEvent get sendEvent;
 
-  @override
   FutureOr<List<Map<int, String>>?> doTwoTa() async {
-    return send.sendMessage(EventTwoTMessage.doTwoTa, null);
+    return sendEvent.sendMessage(EventTwoTMessage.doTwoTa, null);
   }
 
-  @override
   Future<String?> doTwoParT(int a) async {
-    return send.sendMessage(EventTwoTMessage.doTwoParT, a);
+    return sendEvent.sendMessage(EventTwoTMessage.doTwoParT, a);
   }
 }
 
 mixin EventTwoResolve on Resolve, EventTwo {}
 
-mixin EventTwoMessager implements EventTwo {}
+/// implements [EventTwo]
+mixin EventTwoMessager {}

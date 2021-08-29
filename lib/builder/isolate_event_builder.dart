@@ -194,8 +194,8 @@ class IsolateEventGeneratorForAnnotation
       final para = e.parameters.isEmpty
           ? 'null'
           : e.parameters.length == 1
-              ? e.parameters.first.split(' ')[1]
-              : e.parameters.map((e) => e.split(' ')[1]).toList();
+              ? e.parameters.first.split(' ').last
+              : e.parameters.map((e) => e.split(' ').last).toList();
       if (e.returnType!.isDartAsyncFuture ||
           e.returnType!.isDartAsyncFutureOr) {
         buffer.write(
