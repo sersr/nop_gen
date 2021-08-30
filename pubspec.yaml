@@ -12,10 +12,12 @@ dependencies:
   flutter:
     sdk: flutter
   source_gen: any
+  # nop_annotations:
+  #   git: 
+  #     url: https://github.com/sersr/nop_annotations
+  #     ref: master
   nop_annotations:
-    git: 
-      url: https://github.com/sersr/nop_annotations
-      ref: master
+    path: ../nop_annotations
   # nop_db:
   #   git: 
   #     url: https://github.com/sersr/nop_db

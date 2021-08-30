@@ -176,13 +176,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.2.0"
-  ffi:
-    dependency: transitive
-    description:
-      name: ffi
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "1.1.2"
   file:
     dependency: transitive
     description:
@@ -308,11 +301,9 @@ packages:
   nop_annotations:
     dependency: "direct main"
     description:
-      path: "."
-      ref: master
-      resolved-ref: e704d1da1c8697de7c4bb741ed5b37d825004285
-      url: "https://github.com/sersr/nop_annotations"
-    source: git
+      path: "../nop_annotations"
+      relative: true
+    source: path
     version: "0.0.1"
   nop_db:
     dependency: "direct main"
@@ -396,48 +387,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.8.1"
-  sqflite:
-    dependency: transitive
-    description:
-      name: sqflite
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "2.0.0+4"
-  sqflite_common:
-    dependency: transitive
-    description:
-      name: sqflite_common
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "2.0.1"
-  sqflite_common_ffi:
-    dependency: transitive
-    description:
-      name: sqflite_common_ffi
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "2.0.0+3"
-  sqlite3:
-    dependency: transitive
-    description:
-      name: sqlite3
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "1.1.2"
-  sqlite3_flutter_libs:
-    dependency: transitive
-    description:
-      name: sqlite3_flutter_libs
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "0.5.0"
-  sqlite3_library_windows:
-    dependency: transitive
-    description:
-      name: sqlite3_library_windows
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "2.1.0"
   stack_trace:
     dependency: transitive
     description:
@@ -466,13 +415,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.1.0"
-  synchronized:
-    dependency: transitive
-    description:
-      name: synchronized
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "3.0.0"
   term_glyph:
     dependency: transitive
     description:
