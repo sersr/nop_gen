@@ -1,16 +1,13 @@
 name: nop_db_gen
-description: A new Flutter package project.
+description: nop_db code generation.
 version: 0.0.2+4
 homepage: none
 publish_to: none
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
-  flutter: ">=1.17.0"
 
 dependencies:
-  flutter:
-    sdk: flutter
   source_gen: any
   # nop_annotations:
   #   git: 
