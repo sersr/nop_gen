@@ -10,6 +10,8 @@ class _ColumnInfo {
   String? name;
   String? nameDb;
   String? type;
+  String? typeJson;
+
   bool? _isPrimaryKey;
   static const _map = {
     'String': 'TEXT',
@@ -19,8 +21,9 @@ class _ColumnInfo {
     'bool': 'INTEGER',
   };
   bool get isPrimaryKey => _isPrimaryKey ?? false;
-  bool get isBool => type!.replaceAll('?', '') == 'bool';
-  String? get typeDb => _map[type!.replaceAll('?', '')];
+  bool get isBool => type == 'bool';
+  bool get isJson => typeJson != null;
+  String? get typeDb => _map[type];
 }
 
 String firstToLower(String s) {
@@ -138,8 +141,12 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
   //     .toList()
   //     .join('\n');
 
-  final _toMap =
-      columnInfos.map((e) => '\'${e.nameDb}\': table.${e.name}').join(',');
+  final _toMap = columnInfos.map((e) {
+    if (e.isJson) {
+      return '\'${e.nameDb}\': _${e.typeJson}ToMap(table.${e.name}) as ${e.type}';
+    }
+    return '\'${e.nameDb}\': table.${e.name}';
+  }).join(',');
   // buffer
   //   ..write('class _$className extends $className {\n')
   //   ..write('_$className({\n')
@@ -209,6 +216,8 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   final _parMap = columnInfos.map((e) {
     if (e.isBool) {
       return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
+    } else if (e.isJson) {
+      return '${e.name}: _${e.typeJson}ToTable(map[\'${e.nameDb}\'] as ${e.type})';
     }
     return '${e.name}: map[\'${e.nameDb}\'] as ${e.type}';
   }).join(',');
@@ -279,16 +288,26 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
 
           final addPrimaryKey =
               nopItemMeta.getField('primaryKey')?.toBoolValue();
+          final type = nopItemMeta.getField('type')?.toTypeValue();
           if (addPrimaryKey != null && name != null) {
             info._isPrimaryKey = addPrimaryKey;
             info.nameDb = name.isEmpty ? e.name : name;
+            info.type = type?.getDisplayString(withNullability: false);
             break;
           }
         }
       }
     }
     info.nameDb ??= e.name;
-    info.type = e.type.toString();
+    final _type = e.type.getDisplayString(withNullability: false);
+    if (info.type != null) {
+      info.typeJson = _type;
+    }
+    info.type ??= _type;
+    if (info.typeDb == null && info.isJson) {
+      // ignore: avoid_print
+      print('不支持的类型没有提供具体类型 如：`@NopItem(type: String)`');
+    }
     return info;
   }).toList();
 }
