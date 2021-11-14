@@ -143,7 +143,7 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
 
   final _toMap = columnInfos.map((e) {
     if (e.isJson) {
-      return '\'${e.nameDb}\': _${e.typeJson}ToMap(table.${e.name}) as ${e.type}';
+      return '\'${e.nameDb}\': _${e.typeJson}ToMap(table.${e.name}) as ${e.type}?';
     }
     return '\'${e.nameDb}\': table.${e.name}';
   }).join(',');
@@ -217,9 +217,9 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     if (e.isBool) {
       return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
     } else if (e.isJson) {
-      return '${e.name}: _${e.typeJson}ToTable(map[\'${e.nameDb}\'] as ${e.type})';
+      return '${e.name}: _${e.typeJson}ToTable(map[\'${e.nameDb}\'] as ${e.type}?)';
     }
-    return '${e.name}: map[\'${e.nameDb}\'] as ${e.type}';
+    return '${e.name}: map[\'${e.nameDb}\'] as ${e.type}?';
   }).join(',');
 
   buffer
