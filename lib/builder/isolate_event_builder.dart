@@ -20,6 +20,10 @@ class ClassItem {
 class Methods {
   String? name;
   final parameters = <String>[];
+  final parametersMessageList = <String>[];
+  final parametersNamedUsed = <String>[];
+  bool hasNamed = false;
+
   DartType? returnType;
   bool isDynamic = false;
   @override
@@ -46,8 +50,8 @@ class IsolateEventGeneratorForAnnotation
 
   String write(ClassItem item) {
     final buffer = StringBuffer();
-    buffer.write(writeMessageEnum(item));
-    buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
+    buffer.write(writeMessageEnum(item, true));
+    // buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
 
     final className = item.className;
     final _allItems = <String>[];
@@ -165,15 +169,20 @@ class IsolateEventGeneratorForAnnotation
       var count = 0;
 
       for (var f in _funcs) {
-        final paras = f.parameters.length == 1
+        final paras = f.parameters.length == 1 && !f.hasNamed
             ? 'args'
-            : List.generate(f.parameters.length, (index) => 'args[$index]')
-                .join(',');
+            : List.generate(f.parameters.length - f.parametersNamedUsed.length,
+                (index) => 'args[$index]').join(',');
+        final parasOp = f.parametersNamedUsed.join(',');
+        final parasMes = paras.isNotEmpty
+            ? parasOp.isNotEmpty
+                ? ',$parasOp'
+                : ''
+            : parasOp;
         final name = f.isDynamic ? 'dynamic' : f.returnType;
         final tranName = f.isDynamic ? '${f.name}Dynamic' : f.name;
-        buffer.write('$name _${f.name}_$count(args) => $tranName($paras);\n');
-        // if (f.isDynamic)
-        //   buffer.write('dynamic $tranName(${f.parameters.join(',')});\n');
+        buffer.write(
+            '$name _${f.name}_$count(args) => $tranName($paras$parasMes);\n');
         count++;
       }
     }
@@ -191,11 +200,11 @@ class IsolateEventGeneratorForAnnotation
       buffer
           // ..write(e.isDynamic ? '' : _override)
           .write('$returnType $tranName(${e.parameters.join(',')})');
-      final para = e.parameters.isEmpty
+      final para = e.parametersMessageList.isEmpty
           ? 'null'
-          : e.parameters.length == 1
-              ? e.parameters.first.split(' ').last
-              : e.parameters.map((e) => e.split(' ').last).toList();
+          : e.parametersMessageList.length == 1 && !e.hasNamed
+              ? e.parametersMessageList.first
+              : e.parametersMessageList;
       if (e.returnType!.isDartAsyncFuture ||
           e.returnType!.isDartAsyncFutureOr) {
         buffer.write(
@@ -223,16 +232,16 @@ class IsolateEventGeneratorForAnnotation
     return _list;
   }
 
-  String writeMessageEnum(ClassItem item) {
+  String writeMessageEnum(ClassItem item, [bool root = false]) {
     final buffer = StringBuffer();
 
     final _funcs = <String>[];
     _funcs.addAll(item.methods.map((e) => e.name!));
-    if (!item.separate) {
+    if (root || item.separate) {
+      buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
+    } else {
       _funcs.addAll(
           item.sparateLists.expand((e) => e.methods.map((e) => e.name!)));
-    } else {
-      buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
     }
     if (_funcs.isNotEmpty) {
       buffer
@@ -293,9 +302,41 @@ class IsolateEventGeneratorForAnnotation
 
       method.name = methodElement.name;
       method.returnType = methodElement.type.returnType;
+      final parameters = <String>[];
+      final parametersMessage = <String>[];
+      final parametersPosOrNamed = <String>[];
+      final parametersNamedUsed = <String>[];
+      var count = -1;
+      for (var item in methodElement.parameters) {
+        count++;
+        parametersMessage.add(item.name);
+        final requiredValue = item.isRequiredNamed ? 'required ' : '';
+        final defaultValue =
+            item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
+        final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
 
-      method.parameters
-          .addAll(methodElement.parameters.map((e) => '${e.type} ${e.name}'));
+        if (item.isOptionalPositional) {
+          parametersPosOrNamed.add(fot);
+          continue;
+        } else if (item.isNamed) {
+          parametersPosOrNamed.add(fot);
+          method.hasNamed = true;
+          parametersNamedUsed.add('${item.name}: args[$count]');
+          continue;
+        }
+        parameters.add(fot);
+      }
+
+      method.parameters.addAll(parameters);
+      if (parametersPosOrNamed.isNotEmpty) {
+        if (method.hasNamed) {
+          method.parameters.add('{${parametersPosOrNamed.join(',')}}');
+        } else {
+          method.parameters.add('[${parametersPosOrNamed.join(',')}]');
+        }
+      }
+      method.parametersMessageList.addAll(parametersMessage);
+      method.parametersNamedUsed.addAll(parametersNamedUsed);
 
       methodElement.metadata.any((element) {
         final data = element.computeConstantValue();
