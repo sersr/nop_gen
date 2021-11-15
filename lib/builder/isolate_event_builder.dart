@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:nop_annotations/nop_annotations.dart';
@@ -26,6 +28,50 @@ class Methods {
 
   DartType? returnType;
   bool isDynamic = false;
+  bool useTransferType = false;
+  bool get useDynamic => (useTransferType && !useSameReturnType) || isDynamic;
+  bool useSameReturnType = false;
+  String? _getReturnNameTransferType;
+
+  String getReturnNameTransferType(LibraryReader reader) {
+    if (_getReturnNameTransferType != null) return _getReturnNameTransferType!;
+    var returnTypeName = '';
+    final returnName = returnType.toString();
+    void replace(String prefex) {
+      returnName.replaceAllMapped(RegExp('^$prefex<(.*)>\$'), (match) {
+        final item = match[1];
+        final itemNotNull = '$item'.replaceAll('?', '');
+        final currentItem = 'TransferType<$itemNotNull>';
+        final itemElement = reader.findType(itemNotNull);
+
+        if (itemElement is ClassElement) {
+          useSameReturnType = itemElement.allSupertypes.any((element) => element
+              .getDisplayString(withNullability: false)
+              .contains(currentItem));
+        }
+        returnTypeName = useSameReturnType
+            ? returnType.toString()
+            : '$prefex<TransferType<$item>>';
+        return '';
+      });
+    }
+
+    replace('FutureOr');
+    if (returnTypeName.isEmpty) {
+      replace('Future');
+    }
+    if (returnTypeName.isEmpty) {
+      replace('Stream');
+    }
+
+    return _getReturnNameTransferType =
+        useTransferType && returnTypeName.isNotEmpty
+            ? returnTypeName
+            : isDynamic
+                ? 'dynamic'
+                : returnType.toString();
+  }
+
   @override
   String toString() {
     return '$runtimeType: $returnType $name(${parameters.join(',')})';
@@ -34,6 +80,13 @@ class Methods {
 
 class IsolateEventGeneratorForAnnotation
     extends GeneratorForAnnotation<NopIsolateEvent> {
+  late LibraryReader reader;
+  @override
+  FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
+    reader = library;
+    return super.generate(library, buildStep);
+  }
+
   @override
   String generateForAnnotatedElement(
       Element element, ConstantReader annotation, BuildStep buildStep) {
@@ -51,15 +104,14 @@ class IsolateEventGeneratorForAnnotation
   String write(ClassItem item) {
     final buffer = StringBuffer();
     buffer.write(writeMessageEnum(item, true));
-    // buffer.writeAll(item.sparateLists.map((e) => writeMessageEnum(e)));
 
     final className = item.className;
     final _allItems = <String>[];
-    // _allItems.addAll(item.sparateLists.map((e) => e.className!));
+
     _allItems.addAll(item.sparateLists.expand((element) => getTypes(element)));
     if (item.methods.isNotEmpty) _allItems.addAll(getTypes(item));
     final _resolve = _allItems.map((e) => '${e}Resolve').join(',');
-    // item.sparateLists.map((e) => '${e.className}Resolve').join(',');
+
     final _name = rootResolveName == null || rootResolveName!.isEmpty
         ? className
         : rootResolveName;
@@ -111,13 +163,13 @@ class IsolateEventGeneratorForAnnotation
     _funcs.addAll(item.methods);
     final _supers = <String>[];
     final _dynamicItems = <ClassItem>{};
-    if (item.methods.where((element) => element.isDynamic).isNotEmpty) {
+    if (item.methods.where((element) => element.useDynamic).isNotEmpty) {
       _dynamicItems.add(item);
     }
 
     if (!item.separate) {
       _funcs.addAll(item.sparateLists.expand((e) {
-        if (e.methods.where((element) => element.isDynamic).isNotEmpty) {
+        if (e.methods.where((element) => element.useDynamic).isNotEmpty) {
           _dynamicItems.add(e);
         }
         return getMethods(e);
@@ -128,22 +180,25 @@ class IsolateEventGeneratorForAnnotation
     }
     final _implements = <String>[];
     for (var element in _dynamicItems) {
-      final name = '${element.className}Dynamic';
-      _implements.add(name);
-      buffer.write('/// implements [${element.className}]\n');
-      buffer.write('abstract class $name {\n');
-      element.methods.where((element) => element.isDynamic).forEach((e) {
-        buffer.write('dynamic ${e.name}Dynamic(${e.parameters.join(',')});');
-      });
-      buffer.write('}');
+      if (element.methods.isNotEmpty) {
+        final name = '${element.className}Dynamic';
+        _implements.add(name);
+        buffer.write('/// implements [${element.className}]\n');
+        buffer.write('mixin $name {\n');
+        element.methods.where((element) => element.useDynamic).forEach((e) {
+          final name = e.getReturnNameTransferType(reader);
+          buffer.write('$name ${e.name}Dynamic(${e.parameters.join(',')});');
+        });
+        buffer.write('}');
+      }
     }
-    final _impl =
-        _implements.isEmpty ? '' : 'implements ${_implements.join(',')}';
-    final _n =
-        '${item.className?[0].toLowerCase()}${item.className?.substring(1)}';
-    final su = _supers.isEmpty ? item.className : _supers.join(',');
-    buffer.write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
-    if (item.methods.isNotEmpty) {
+    if (_funcs.isNotEmpty) {
+      final _impl =
+          _implements.isEmpty ? '' : 'implements ${_implements.join(',')}';
+      final _n =
+          '${item.className?[0].toLowerCase()}${item.className?.substring(1)}';
+      final su = _supers.isEmpty ? item.className : _supers.join(',');
+      buffer.write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
       buffer
         ..write(
             'late final _${_n}ResolveFuncList = List<DynamicCallback>.unmodifiable(')
@@ -179,53 +234,56 @@ class IsolateEventGeneratorForAnnotation
                 ? ',$parasOp'
                 : ''
             : parasOp;
-        final name = f.isDynamic ? 'dynamic' : f.returnType;
-        final tranName = f.isDynamic ? '${f.name}Dynamic' : f.name;
+
+        final name = f.getReturnNameTransferType(reader);
+        final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
         buffer.write(
             '$name _${f.name}_$count(args) => $tranName($paras$parasMes);\n');
         count++;
       }
-    }
-    buffer.write('\n}\n\n');
-    buffer.write('/// implements [${item.className}]\n');
-
-    buffer.write('mixin ${item.className}Messager {\n');
-    bool writeRoot = item.methods.isNotEmpty;
-    if (writeRoot) buffer.write('SendEvent get sendEvent;\n\n');
-
-    for (var e in _funcs) {
-      final returnType = e.isDynamic ? 'dynamic' : e.returnType;
-      final tranName = e.isDynamic ? '${e.name}Dynamic' : e.name;
-
-      buffer
-          // ..write(e.isDynamic ? '' : _override)
-          .write('$returnType $tranName(${e.parameters.join(',')})');
-      final para = e.parametersMessageList.isEmpty
-          ? 'null'
-          : e.parametersMessageList.length == 1 && !e.hasNamed
-              ? e.parametersMessageList.first
-              : e.parametersMessageList;
-      if (e.returnType!.isDartAsyncFuture ||
-          e.returnType!.isDartAsyncFutureOr) {
-        buffer.write(
-            'async {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
-      } else if (e.returnType!.toString().startsWith('Stream')) {
-        buffer.write(
-            '{\n return sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para);');
-      } else {
-        buffer.write('{\n');
-      }
       buffer.write('\n}\n\n');
+
+      buffer.write('/// implements [${item.className}]\n');
+
+      buffer.write('mixin ${item.className}Messager {\n');
+      bool writeRoot = item.methods.isNotEmpty;
+      if (writeRoot) buffer.write('SendEvent get sendEvent;\n\n');
+
+      for (var e in _funcs) {
+        final returnType =
+            (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
+        final tranName = e.useDynamic ? '${e.name}Dynamic' : e.name;
+
+        buffer.write('$returnType $tranName(${e.parameters.join(',')})');
+        final para = e.parametersMessageList.isEmpty
+            ? 'null'
+            : e.parametersMessageList.length == 1 && !e.hasNamed
+                ? e.parametersMessageList.first
+                : e.parametersMessageList;
+        final eRetureType = e.returnType!;
+        if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
+          buffer.write(
+              'async {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
+        } else if (eRetureType.toString() == 'Stream' ||
+            eRetureType.toString().startsWith('Stream<')) {
+          buffer.write(
+              '{\n return sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para);');
+        } else {
+          buffer.write('{\n');
+        }
+        buffer.write('\n}\n\n');
+      }
+      buffer.write('}\n\n');
     }
 
-    buffer.write('}\n\n');
     return buffer.toString();
   }
 
   List<String> getTypes(ClassItem item) {
     final _list = <String>[];
-
-    _list.add(item.className!);
+    if (item.methods.isNotEmpty) {
+      _list.add(item.className!);
+    }
     if (item.separate) {
       _list.addAll(item.sparateLists.expand((e) => getTypes(e)));
     }
@@ -301,7 +359,8 @@ class IsolateEventGeneratorForAnnotation
       final method = Methods();
 
       method.name = methodElement.name;
-      method.returnType = methodElement.type.returnType;
+      method.returnType = methodElement.returnType;
+
       final parameters = <String>[];
       final parametersMessage = <String>[];
       final parametersPosOrNamed = <String>[];
@@ -344,11 +403,15 @@ class IsolateEventGeneratorForAnnotation
         if (type == 'NopIsolateMethod') {
           final _isDynamic =
               data?.getField('isDynamic')?.toBoolValue() ?? false;
+          final _useTransferType =
+              data?.getField('useTransferType')?.toBoolValue() ?? false;
           method.isDynamic = _isDynamic;
+          method.useTransferType = _useTransferType;
           return true;
         }
         return false;
       });
+      method.getReturnNameTransferType(reader);
 
       _item.methods.add(method);
     }
