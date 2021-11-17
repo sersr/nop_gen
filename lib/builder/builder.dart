@@ -35,6 +35,8 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
   String generateForAnnotatedElement(
       Element element, ConstantReader annotation, BuildStep buildStep) {
     final buffer = StringBuffer();
+    buffer
+        .writeln('// ignore_for_file: curly_braces_in_flow_control_structures');
     final tables = <DartType?>[];
 
     if (element is ClassElement) {
@@ -67,7 +69,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
           var _userTable = e.name;
           // auto gen
           var genDbName = _userTable;
-          var databaseTable = '_Gen$genDbName';
+          var databaseTable = 'Gen$genDbName';
           for (final medata in e.metadata) {
             final cs = medata.computeConstantValue();
             final tbName = cs?.getField('tableName')?.toStringValue();
@@ -75,7 +77,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
             if (table != null && table.isNotEmpty) {
               _userTable = table;
               genDbName = _userTable;
-              databaseTable = '_Gen$genDbName';
+              databaseTable = 'Gen$genDbName';
             }
             if (tbName != null && tbName.isNotEmpty) {
               // use config
@@ -143,7 +145,7 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
 
   final _toMap = columnInfos.map((e) {
     if (e.isJson) {
-      return '\'${e.nameDb}\': _${e.typeJson}ToMap(table.${e.name}) as ${e.type}?';
+      return '\'${e.nameDb}\': _${e.typeJson}ToMap(table.${e.name})';
     }
     return '\'${e.nameDb}\': table.${e.name}';
   }).join(',');
@@ -217,18 +219,18 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     if (e.isBool) {
       return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
     } else if (e.isJson) {
-      return '${e.name}: _${e.typeJson}ToTable(map[\'${e.nameDb}\'] as ${e.type}?)';
+      return '${e.name}: _${e.typeJson}ToTable(map[\'${e.nameDb}\'])';
     }
     return '${e.name}: map[\'${e.nameDb}\'] as ${e.type}?';
   }).join(',');
 
   buffer
-    ..write('$userTableName _toTable(Map<String,dynamic> map) =>\n')
+    ..write('static $userTableName mapToTable(Map<String,dynamic> map) =>\n')
     ..write(' $userTableName($_parMap);\n')
     ..write(writeOver)
     ..write(
         'List<$userTableName> toTable(Iterable<Map<String,Object?>> query) => ')
-    ..write('query.map((e)=> _toTable(e)).toList();')
+    ..write('query.map((e)=> mapToTable(e)).toList();')
     // ..write(writeOver)
     // ..write('Map<String,dynamic> toJson($userTableName table) => ')
     // ..write('table.toJson();')

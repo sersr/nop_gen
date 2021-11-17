@@ -29,7 +29,7 @@ class Methods {
   DartType? returnType;
   bool isDynamic = false;
   bool useTransferType = false;
-  bool get useDynamic => (useTransferType && !useSameReturnType) || isDynamic;
+  bool get useDynamic => isDynamic || (useTransferType && !useSameReturnType);
   bool useSameReturnType = false;
   String? _getReturnNameTransferType;
 
@@ -103,6 +103,7 @@ class IsolateEventGeneratorForAnnotation
 
   String write(ClassItem item) {
     final buffer = StringBuffer();
+    buffer.writeln('// ignore_for_file: annotate_overrides\n');
     buffer.write(writeMessageEnum(item, true));
 
     final className = item.className;
@@ -237,6 +238,10 @@ class IsolateEventGeneratorForAnnotation
 
         final name = f.getReturnNameTransferType(reader);
         final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
+        if (f.useTransferType) {
+          buffer.writeln(
+              '${f.returnType} ${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("不要手动调用");');
+        }
         buffer.write(
             '$name _${f.name}_$count(args) => $tranName($paras$parasMes);\n');
         count++;
@@ -252,7 +257,8 @@ class IsolateEventGeneratorForAnnotation
       for (var e in _funcs) {
         final returnType =
             (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
-        final tranName = e.useDynamic ? '${e.name}Dynamic' : e.name;
+        final tranName =
+            (e.useTransferType || !e.isDynamic) ? e.name : '${e.name}Dynamic';
 
         buffer.write('$returnType $tranName(${e.parameters.join(',')})');
         final para = e.parametersMessageList.isEmpty
@@ -263,7 +269,7 @@ class IsolateEventGeneratorForAnnotation
         final eRetureType = e.returnType!;
         if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
           buffer.write(
-              'async {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
+              ' {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
         } else if (eRetureType.toString() == 'Stream' ||
             eRetureType.toString().startsWith('Stream<')) {
           buffer.write(
