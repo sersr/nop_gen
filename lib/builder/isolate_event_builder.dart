@@ -123,14 +123,14 @@ class IsolateEventGeneratorForAnnotation
     final mix = _resolve.isEmpty ? '' : ', $_resolve';
     buffer
       .writeln('''
-        abstract class ${_name}ResolveMain extends $className with Resolve$mix {
-          @override
-          bool resolve(resolveMessage){
-            if (remove(resolveMessage)) return true;
-            if (resolveMessage is! IsolateSendMessage  && resolveMessage is! KeyController) return false;
-            return super.resolve(resolveMessage);
-          }
-        }''');
+        abstract class ${_name}ResolveMain extends $className with Resolve$mix {}''');
+    //   @override
+    //   bool resolve(resolveMessage){
+    //     if (remove(resolveMessage)) return true;
+    //     if (resolveMessage is! IsolateSendMessage  && resolveMessage is! KeyController) return false;
+    //     return super.resolve(resolveMessage);
+    //   }
+    // }''');
     final _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
 
     buffer
@@ -216,7 +216,7 @@ class IsolateEventGeneratorForAnnotation
             if (type is  ${item.messagerType}Message) {
               dynamic result;
               try {
-              if(on${item.messagerType}Resolve(resolveMessage)) return true;
+                if(on${item.messagerType}Resolve(resolveMessage)) return true;
                 result = _${_n}ResolveFuncList.elementAt(type.index)(resolveMessage.args);
                 receipt(result, resolveMessage);
               } catch (e) {
