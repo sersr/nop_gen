@@ -24,6 +24,10 @@ class Methods {
   final parameters = <String>[];
   final parametersMessageList = <String>[];
   final parametersNamedUsed = <String>[];
+
+  bool unique = false;
+  bool cached = false;
+
   bool hasNamed = false;
 
   DartType? returnType;
@@ -116,25 +120,22 @@ class IsolateEventGeneratorForAnnotation
     final _name = rootResolveName == null || rootResolveName!.isEmpty
         ? className
         : rootResolveName;
+    final mix = _resolve.isEmpty ? '' : ', $_resolve';
     buffer
-      ..write(
-          'abstract class ${_name}ResolveMain extends $className with Resolve')
-      ..write(_resolve.isEmpty ? '' : ', $_resolve')
-      ..write('{\n')
-      ..write(_override)
-      ..write('bool resolve(resolveMessage){\n')
-      ..write('if (remove(resolveMessage)) return true;\n')
-      ..write(' if (resolveMessage is! IsolateSendMessage) return false;\n')
-      ..write('return super.resolve(resolveMessage);\n')
-      ..write('\n}\n}\n');
+      .writeln('''
+        abstract class ${_name}ResolveMain extends $className with Resolve$mix {
+          @override
+          bool resolve(resolveMessage){
+            if (remove(resolveMessage)) return true;
+            if (resolveMessage is! IsolateSendMessage  && resolveMessage is! KeyController) return false;
+            return super.resolve(resolveMessage);
+          }
+        }''');
     final _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
 
     buffer
-      ..write(
-          'abstract class ${_name}MessagerMain extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} ')
-      ..write(_allItemsMessager)
-      ..write('{\n')
-      ..write('}\n\n');
+      .writeln(
+        'abstract class ${_name}MessagerMain extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}');
     if (item.methods.isNotEmpty) buffer.write(writeItems(item));
     buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
     return buffer.toString();
@@ -205,23 +206,28 @@ class IsolateEventGeneratorForAnnotation
             'late final _${_n}ResolveFuncList = List<DynamicCallback>.unmodifiable(')
         ..write(
             '${List.generate(_funcs.length, (index) => '_${_funcs[index].name}_$index')}')
-        ..write(');\n')
-        ..write(_override)
-        ..write('  bool resolve(resolveMessage) {\n')
-        ..write('if (resolveMessage is IsolateSendMessage) {\n')
-        ..write('final type = resolveMessage.type; \n')
-        ..write('if (type is  ${item.messagerType}Message) {\n')
-        ..write('dynamic result;\n')
-        ..write('try {\n')
-        ..write(
-            'result = _${_n}ResolveFuncList.elementAt(type.index)(resolveMessage.args);\n')
-        ..write('receipt(result, resolveMessage);\n')
-        ..write('} catch (e) {\n')
-        ..write('receipt(result, resolveMessage, e);\n}')
-        ..write('return true;\n}');
+        ..writeln(');')
+        ..writeln('''
+        bool on${item.messagerType}Resolve(message) => false;
+        @override
+        bool resolve(resolveMessage) {
+          if (resolveMessage is IsolateSendMessage) {
+            final type = resolveMessage.type;
+            if (type is  ${item.messagerType}Message) {
+              dynamic result;
+              try {
+              if(on${item.messagerType}Resolve(resolveMessage)) return true;
+                result = _${_n}ResolveFuncList.elementAt(type.index)(resolveMessage.args);
+                receipt(result, resolveMessage);
+              } catch (e) {
+                receipt(result, resolveMessage, e);
+              }
+              return true; 
+            }
+          }
+          return super.resolve(resolveMessage);
+        }''');
 
-      buffer.write('}\n');
-      buffer.write('return super.resolve(resolveMessage);\n}');
       var count = 0;
 
       for (var f in _funcs) {
@@ -272,8 +278,21 @@ class IsolateEventGeneratorForAnnotation
               ' {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
         } else if (eRetureType.toString() == 'Stream' ||
             eRetureType.toString().startsWith('Stream<')) {
+          final unique = e.unique;
+          final cached = e.cached;
+          var named = '';
+          if (unique || cached) {
+            final list = <String>[];
+            if (unique) {
+              list.add('unique: true');
+            }
+            if (cached) {
+              list.add('cached: true');
+            }
+            named = ',${list.join(',')}';
+          }
           buffer.write(
-              '{\n return sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para);');
+              '{\n return sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
         } else {
           buffer.write('{\n');
         }
@@ -411,8 +430,14 @@ class IsolateEventGeneratorForAnnotation
               data?.getField('isDynamic')?.toBoolValue() ?? false;
           final _useTransferType =
               data?.getField('useTransferType')?.toBoolValue() ?? false;
-          method.isDynamic = _isDynamic;
-          method.useTransferType = _useTransferType;
+          final _unique = data?.getField('unique')?.toBoolValue() ?? false;
+          final _cached = data?.getField('cached')?.toBoolValue() ?? false;
+          method
+            ..isDynamic = _isDynamic
+            ..useTransferType = _useTransferType
+            ..unique = _unique
+            ..cached = _cached;
+
           return true;
         }
         return false;
