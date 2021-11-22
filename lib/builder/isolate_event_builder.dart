@@ -103,7 +103,9 @@ class IsolateEventGeneratorForAnnotation
     return '';
   }
 
-  final _override = '\n@override\n';
+  String lowName(String source) {
+    return '${source[0].toLowerCase()}${source.substring(1)}';
+  }
 
   String write(ClassItem item) {
     final buffer = StringBuffer();
@@ -121,8 +123,7 @@ class IsolateEventGeneratorForAnnotation
         ? className
         : rootResolveName;
     final mix = _resolve.isEmpty ? '' : ', $_resolve';
-    buffer
-      .writeln('''
+    buffer.writeln('''
         abstract class ${_name}ResolveMain extends $className with Resolve$mix {}''');
     //   @override
     //   bool resolve(resolveMessage){
@@ -133,8 +134,7 @@ class IsolateEventGeneratorForAnnotation
     // }''');
     final _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
 
-    buffer
-      .writeln(
+    buffer.writeln(
         'abstract class ${_name}MessagerMain extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}');
     if (item.methods.isNotEmpty) buffer.write(writeItems(item));
     buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
@@ -197,8 +197,7 @@ class IsolateEventGeneratorForAnnotation
     if (_funcs.isNotEmpty) {
       final _impl =
           _implements.isEmpty ? '' : 'implements ${_implements.join(',')}';
-      final _n =
-          '${item.className?[0].toLowerCase()}${item.className?.substring(1)}';
+      final _n = lowName(item.className!);
       final su = _supers.isEmpty ? item.className : _supers.join(',');
       buffer.write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
       buffer
@@ -252,13 +251,15 @@ class IsolateEventGeneratorForAnnotation
             '$name _${f.name}_$count(args) => $tranName($paras$parasMes);\n');
         count++;
       }
-      buffer.write('\n}\n\n');
+      buffer.writeln('\n}\n');
+      var sendEvent = '${lowName(item.className!)}SendEvent';
 
-      buffer.write('/// implements [${item.className}]\n');
-
-      buffer.write('mixin ${item.className}Messager {\n');
-      bool writeRoot = item.methods.isNotEmpty;
-      if (writeRoot) buffer.write('SendEvent get sendEvent;\n\n');
+      buffer.writeln('''
+        /// implements [${item.className}]
+        mixin ${item.className}Messager {
+          SendEvent get sendEvent;
+          SendEvent get $sendEvent => sendEvent;
+        ''');
 
       for (var e in _funcs) {
         final returnType =
@@ -275,7 +276,7 @@ class IsolateEventGeneratorForAnnotation
         final eRetureType = e.returnType!;
         if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
           buffer.write(
-              ' {\n return sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
+              ' {\n return $sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
         } else if (eRetureType.toString() == 'Stream' ||
             eRetureType.toString().startsWith('Stream<')) {
           final unique = e.unique;
@@ -292,7 +293,7 @@ class IsolateEventGeneratorForAnnotation
             named = ',${list.join(',')}';
           }
           buffer.write(
-              '{\n return sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
+              '{\n return $sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
         } else {
           buffer.write('{\n');
         }
@@ -354,7 +355,7 @@ class IsolateEventGeneratorForAnnotation
         final messageName = meta?.getField('messageName')?.toStringValue();
         final separate = meta?.getField('separate')?.toBoolValue();
         generate = meta?.getField('generate')?.toBoolValue() ?? generate;
-
+        
         if (messageName != null && separate != null) {
           _item.separate = separate;
           if (messageName.isNotEmpty) _item.messagerType = messageName;
