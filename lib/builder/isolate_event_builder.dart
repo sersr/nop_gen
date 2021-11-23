@@ -195,11 +195,18 @@ class IsolateEventGeneratorForAnnotation
       }
     }
     if (_funcs.isNotEmpty) {
-      final _impl =
-          _implements.isEmpty ? '' : 'implements ${_implements.join(',')}';
+      final _list = <String>[];
+
       final _n = lowName(item.className!);
-      final su = _supers.isEmpty ? item.className : _supers.join(',');
-      buffer.write('mixin ${item.className}Resolve on Resolve, $su $_impl {\n');
+      final su = _supers.isEmpty ? '${item.className}' : _supers.join(',');
+      var impl = '';
+      _list.add(su);
+      if (_implements.isNotEmpty) {
+        _list.add(_implements.join(','));
+      }
+      impl = _list.join(',');
+      buffer.write(
+          'mixin ${item.className}Resolve on Resolve implements $impl {\n');
       buffer
         ..write(
             'late final _${_n}ResolveFuncList = List<DynamicCallback>.unmodifiable(')
