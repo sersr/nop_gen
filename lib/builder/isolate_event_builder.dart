@@ -9,10 +9,13 @@ import 'package:analyzer/dart/element/element.dart';
 
 class ClassItem {
   String? className;
+  ClassItem? parent;
+
   final sparateLists = <ClassItem>[];
   bool separate = false;
-  String? messagerType;
+  String messagerType = '';
   final methods = <Methods>[];
+  String isolateName = '';
   @override
   String toString() {
     return '$runtimeType: $className, $messagerType,$separate <$sparateLists>, $methods';
@@ -107,6 +110,10 @@ class IsolateEventGeneratorForAnnotation
     return '${source[0].toLowerCase()}${source.substring(1)}';
   }
 
+  String upperName(String source) {
+    return '${source[0].toUpperCase()}${source.substring(1)}';
+  }
+
   String write(ClassItem item) {
     final buffer = StringBuffer();
     buffer.writeln('// ignore_for_file: annotate_overrides\n');
@@ -125,19 +132,42 @@ class IsolateEventGeneratorForAnnotation
     final mix = _resolve.isEmpty ? '' : ', $_resolve';
     buffer.writeln('''
         abstract class ${_name}ResolveMain extends $className with Resolve$mix {}''');
-    //   @override
-    //   bool resolve(resolveMessage){
-    //     if (remove(resolveMessage)) return true;
-    //     if (resolveMessage is! IsolateSendMessage  && resolveMessage is! KeyController) return false;
-    //     return super.resolve(resolveMessage);
-    //   }
-    // }''');
+
     final _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
 
     buffer.writeln(
         'abstract class ${_name}MessagerMain extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}');
     if (item.methods.isNotEmpty) buffer.write(writeItems(item));
     buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
+    final multiItems = <String, Set<ClassItem>>{};
+
+    String getNonDefaultName(ClassItem item) {
+      if (item.isolateName.isEmpty) {
+        if (item.parent != null) {
+          return getNonDefaultName(item.parent!);
+        }
+        return 'default';
+      }
+      return item.isolateName;
+    }
+
+    void _add(ClassItem item) {
+      item.isolateName = getNonDefaultName(item);
+
+      final items =
+          multiItems.putIfAbsent(item.isolateName, () => <ClassItem>{});
+      items.add(item);
+
+      for (var element in item.sparateLists) {
+        _add(element);
+      }
+    }
+
+    // 至少有一个是默认的
+    item.isolateName = 'default';
+    _add(item);
+    buffer
+        .writeAll(multiItems.values.map((e) => writeMultiIsolate(e.toList())));
     return buffer.toString();
   }
 
@@ -159,6 +189,7 @@ class IsolateEventGeneratorForAnnotation
     return _supers;
   }
 
+  /// 生成`Messager`、`Resolve`
   String writeItems(ClassItem item) {
     final buffer = StringBuffer();
     final _funcs = <Methods>[];
@@ -180,7 +211,10 @@ class IsolateEventGeneratorForAnnotation
     } else {
       buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
     }
+
     final _implements = <String>[];
+
+    /// --------------- Mixin Dynamic ----------------------------
     for (var element in _dynamicItems) {
       if (element.methods.isNotEmpty) {
         final name = '${element.className}Dynamic';
@@ -194,6 +228,8 @@ class IsolateEventGeneratorForAnnotation
         buffer.write('}');
       }
     }
+
+    /// ------------ Resolve -------------------------------------
     if (_funcs.isNotEmpty) {
       final _list = <String>[];
 
@@ -261,6 +297,7 @@ class IsolateEventGeneratorForAnnotation
       buffer.writeln('\n}\n');
       var sendEvent = '${lowName(item.className!)}SendEvent';
 
+      /// --------------------- Messager -----------------------
       buffer.writeln('''
         /// implements [${item.className}]
         mixin ${item.className}Messager {
@@ -312,6 +349,160 @@ class IsolateEventGeneratorForAnnotation
     return buffer.toString();
   }
 
+  String writeMultiIsolate(List<ClassItem> items) {
+    if (items.isEmpty) {
+      // ignore: avoid_print
+      print('.------------error: ${items.length}');
+      return '';
+    }
+    final buffer = StringBuffer();
+    var isDefault = false;
+    var isolateName = items.first.isolateName;
+    if (isolateName == 'default') {
+      isDefault = true;
+      isolateName = '${items.first.className}Default';
+    }
+
+    /// ------- multi Isolate generator ----------
+    // if (item.isolateName.isNotEmpty) {
+    final allEnums = <String>{};
+
+    void _fore(ClassItem innerItem) {
+      if (innerItem.methods.isNotEmpty) {
+        allEnums.add('${innerItem.messagerType}Message');
+      }
+      for (var element in innerItem.sparateLists) {
+        if (element.isolateName.isEmpty || element.isolateName == isolateName) {
+          _fore(element);
+        }
+      }
+    }
+
+    final _supers = <String>{};
+
+    for (var item in items) {
+      _fore(item);
+      _supers.addAll(getSupers(item).whereType<String>());
+    }
+
+    final _list = <String>[];
+
+    final su = _supers.isEmpty
+        ? items.map((e) => e.className).join(',')
+        : _supers.join(',');
+    var impl = '';
+    _list.add(su);
+    // if (_implements.isNotEmpty) {
+    //   _list.add(_implements.join(','));
+    // }
+    impl = _list.isNotEmpty ? ',${_list.join(',')}' : '';
+
+    final upperIsolateName = upperName(isolateName);
+    final lowIsolateName = lowName('${isolateName}Isolate');
+    final sendPortOwner = '${lowIsolateName}SendPortOwner';
+    var enums = '';
+    if (allEnums.isNotEmpty) {
+      final buffer = StringBuffer();
+      buffer
+        ..writeln('switch(messagerType.runtimeType){')
+        ..writeAll(allEnums.map((e) => 'case $e:\n'))
+        ..writeln('return $sendPortOwner;')
+        ..writeln('default:')
+        ..writeln('}');
+      enums = buffer.toString();
+    }
+    final def = isDefault
+        ? 'SendPortOwner? get defaultSendPortOwner => $sendPortOwner;'
+            '  String get  defaultIsolateName => $lowIsolateName;'
+        : '';
+    buffer.writeln('''
+        mixin Multi${upperIsolateName}Mixin on SendEvent,Send, SendMultiIsolateMixin $impl {
+          Future<Isolate> createIsolate$upperIsolateName(SendPort remoteSendPort);
+          final String $lowIsolateName = '$isolateName';
+          $def
+          SendPortOwner? $sendPortOwner;
+
+          void createAllIsolate(SendPort remoteSendPort,add) {
+            final task = createIsolate$upperIsolateName(remoteSendPort)
+              .then((isolate)=> addNewIsolate($lowIsolateName,isolate));
+            add(task);
+            return super.createAllIsolate(remoteSendPort,add);
+          }
+
+          void onDoneMulti(String isolateName, SendPort localSendPort,SendPort remoteSendPort) {
+            if(isolateName == $lowIsolateName) {
+              $sendPortOwner = SendPortOwner(localSendPort: localSendPort, remoteSendPort: remoteSendPort);
+              return;
+            }
+            super.onDoneMulti(isolateName,localSendPort,remoteSendPort);
+          }
+
+          void onResume() {
+            if($sendPortOwner == null) {
+              Log.e('sendPortOwner error: current $sendPortOwner == null',onlyDebug: false);
+            }
+            super.onResume();
+          }
+
+          SendPortOwner? getSendPortOwner(messagerType) {
+            $enums
+            if(messagerType == $lowIsolateName) {
+              return $sendPortOwner;
+            }
+            return super.getSendPortOwner(messagerType);
+          }
+
+          void disposeIsolate(String isolateName) {
+            if(isolateName == $lowIsolateName){
+              $sendPortOwner = null;
+              return;
+            }
+            return super.disposeIsolate(isolateName);
+          }
+        }
+
+        mixin Multi${upperIsolateName}ResolveMixin on SendEvent,Send, ResolveMixin {
+          bool add(message);
+          SendPortOwner? $sendPortOwner;
+          final String $lowIsolateName = '$isolateName';
+
+          bool listenResolve(message) {
+            // 处理返回的消息/数据
+            if (add(message)) return true;
+            // 默认，分发事件
+            return super.listenResolve(message);
+          }
+
+          void onResolveReceivedSendPort(SendPortName sendPortName) {
+            if (sendPortName.name == $lowIsolateName) {
+              Log.w('received sendPort: \${sendPortName.name}', onlyDebug: false);
+              $sendPortOwner = SendPortOwner(
+                  localSendPort: sendPortName.sendPort, remoteSendPort: localSendPort);
+              onResume();
+              return;
+            }
+            super.onResolveReceivedSendPort(sendPortName);
+          }
+
+          FutureOr<bool> onClose() async {
+            $sendPortOwner = null;
+            return super.onClose();
+          }
+        }
+
+        mixin Multi${upperIsolateName}OnResumeMixin on ResolveMixin {
+           void onResumeResolve() {
+              if (remoteSendPort != null) {
+                remoteSendPort!.send(SendPortName('$isolateName',localSendPort));
+              }
+           }
+        }
+
+        ''');
+    // }
+    return buffer.toString();
+  }
+
   List<String> getTypes(ClassItem item) {
     final _list = <String>[];
     if (item.methods.isNotEmpty) {
@@ -351,8 +542,9 @@ class IsolateEventGeneratorForAnnotation
     }
   }
 
-  ClassItem? gen(ClassElement element) {
+  ClassItem? gen(ClassElement element, [ClassItem? parent]) {
     final _item = ClassItem();
+    _item.parent = parent;
 
     bool generate = true;
     element.metadata.any((_e) {
@@ -362,9 +554,11 @@ class IsolateEventGeneratorForAnnotation
         final messageName = meta?.getField('messageName')?.toStringValue();
         final separate = meta?.getField('separate')?.toBoolValue();
         generate = meta?.getField('generate')?.toBoolValue() ?? generate;
-        
-        if (messageName != null && separate != null) {
+        final isolateName = meta?.getField('isolateName')?.toStringValue();
+
+        if (messageName != null && separate != null && isolateName != null) {
           _item.separate = separate;
+          _item.isolateName = isolateName;
           if (messageName.isNotEmpty) _item.messagerType = messageName;
           return true;
         }
@@ -375,18 +569,24 @@ class IsolateEventGeneratorForAnnotation
       }
       return false;
     });
+
     if (!generate) return null;
 
     final _ci = genSuperType(element);
     if (_ci != null) _item.sparateLists.add(_ci);
 
-    _item.sparateLists.addAll(
-        element.interfaces.map((e) => gen(e.element)).whereType<ClassItem>());
-    _item.sparateLists.addAll(
-        element.mixins.map((e) => gen(e.element)).whereType<ClassItem>());
+    _item.sparateLists.addAll(element.interfaces
+        .map((e) => gen(e.element, _item))
+        .whereType<ClassItem>());
+
+    _item.sparateLists.addAll(element.mixins
+        .map((e) => gen(e.element, _item))
+        .whereType<ClassItem>());
 
     _item.className ??= element.name;
-    _item.messagerType ??= element.name;
+    if (_item.messagerType.isEmpty) {
+      _item.messagerType = element.name;
+    }
 
     for (var methodElement in element.methods) {
       final method = Methods();
