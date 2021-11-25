@@ -1,6 +1,6 @@
 name: nop_db_gen
 description: nop_db code generation.
-version: 0.0.2+4
+version: 0.1.0
 homepage: none
 publish_to: none
 

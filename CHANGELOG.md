@@ -1,3 +1,5 @@
-## 0.0.1
+## 0.1.0
 
-* TODO: Describe initial release.
+* 支持多个 `Isolate` 通信
+* 根据生成的`mixin`s组合协议
+* 在初始化时，会根据协议检测，判断是否验证成功
