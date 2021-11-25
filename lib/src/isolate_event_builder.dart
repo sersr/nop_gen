@@ -107,23 +107,25 @@ class IsolateEventGeneratorForAnnotation
   }
 
   String lowName(String source) {
+    if(source.isEmpty) return source;
     return '${source[0].toLowerCase()}${source.substring(1)}';
   }
 
   String upperName(String source) {
+    if(source.isEmpty) return source;
     return '${source[0].toUpperCase()}${source.substring(1)}';
   }
 
-  String write(ClassItem item) {
+  String write(ClassItem root) {
     final buffer = StringBuffer();
     buffer.writeln('// ignore_for_file: annotate_overrides\n');
-    buffer.write(writeMessageEnum(item, true));
+    buffer.write(writeMessageEnum(root, true));
 
-    final className = item.className;
+    final className = root.className;
     final _allItems = <String>[];
 
-    _allItems.addAll(item.sparateLists.expand((element) => getTypes(element)));
-    if (item.methods.isNotEmpty) _allItems.addAll(getTypes(item));
+    _allItems.addAll(root.sparateLists.expand((element) => getTypes(element)));
+    if (root.methods.isNotEmpty) _allItems.addAll(getTypes(root));
     final _resolve = _allItems.map((e) => '${e}Resolve').join(',');
 
     final _name = rootResolveName == null || rootResolveName!.isEmpty
@@ -137,8 +139,8 @@ class IsolateEventGeneratorForAnnotation
 
     buffer.writeln(
         'abstract class ${_name}MessagerMain extends $className ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}');
-    if (item.methods.isNotEmpty) buffer.write(writeItems(item));
-    buffer.writeAll(item.sparateLists.map((e) => writeItems(e)));
+    if (root.methods.isNotEmpty) buffer.write(writeItems(root));
+    buffer.writeAll(root.sparateLists.map((e) => writeItems(e)));
     final multiItems = <String, Set<ClassItem>>{};
 
     String getNonDefaultName(ClassItem item) {
@@ -163,9 +165,9 @@ class IsolateEventGeneratorForAnnotation
       }
     }
 
-    // 至少有一个是默认的
-    item.isolateName = 'default';
-    _add(item);
+    /// root 必须是`default`
+    root.isolateName = 'default';
+    _add(root);
     buffer
         .writeAll(multiItems.values.map((e) => writeMultiIsolate(e.toList())));
     return buffer.toString();

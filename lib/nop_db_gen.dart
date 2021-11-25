@@ -1,4 +1,4 @@
 library nop_db_gen;
 
-export 'builder/builder.dart';
-export 'builder/isolate_event_builder.dart';
+export 'src/builder.dart';
+export 'src/isolate_event_builder.dart';
