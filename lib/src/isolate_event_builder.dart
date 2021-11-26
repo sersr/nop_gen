@@ -7,6 +7,25 @@ import 'package:nop_annotations/nop_annotations.dart';
 import 'package:source_gen/source_gen.dart';
 import 'package:analyzer/dart/element/element.dart';
 
+class IsolateGroup {
+  IsolateGroup(this.isolateName);
+  final String isolateName;
+  final connectToGroup = <IsolateGroup>{};
+  final Set<ClassItem> connects = {};
+  final Set<ClassItem> currentItems = {};
+  void addConnectToGroup(IsolateGroup group) {
+    connectToGroup.add(group);
+  }
+
+  void addConnect(ClassItem item) {
+    connects.add(item);
+  }
+
+  void addCurerntItem(ClassItem item) {
+    currentItems.add(item);
+  }
+}
+
 class ClassItem {
   String? className;
   ClassItem? parent;
@@ -17,11 +36,10 @@ class ClassItem {
   final methods = <Methods>[];
   String isolateName = '';
   List<String> connectToIsolate = const [];
-  Set<String>? connects;
 
   @override
   String toString() {
-    return '$runtimeType: $className, $messagerType,$separate <$supers>, $methods';
+    return '$runtimeType: $className';
   }
 }
 
@@ -139,8 +157,7 @@ class IsolateEventGeneratorForAnnotation
 
     final className = root.className;
 
-    final multiItems = <String, Set<ClassItem>>{};
-    final _connectsMaps = <String, Set<String>>{};
+    final multiItems = <String, IsolateGroup>{};
 
     void _add(ClassItem item) {
       final parentItem = getNonDefaultName(item);
@@ -149,17 +166,17 @@ class IsolateEventGeneratorForAnnotation
         item.isolateName = parentItem.isolateName;
       }
 
-      final items =
-          multiItems.putIfAbsent(item.isolateName, () => <ClassItem>{});
-      items.add(item);
-      final connects =
-          _connectsMaps.putIfAbsent(item.isolateName, () => <String>{});
-      item.connects = connects;
+      final group = multiItems.putIfAbsent(
+          item.isolateName, () => IsolateGroup(item.isolateName));
+      group.addCurerntItem(item);
+
       final connectTo = item.connectToIsolate;
-      for (var conTo in connectTo) {
-        if (conTo == item.isolateName) continue;
-        final connects = _connectsMaps.putIfAbsent(conTo, () => <String>{});
-        connects.add(item.isolateName);
+      for (var connectToIsolateName in connectTo) {
+        if (connectToIsolateName == item.isolateName) continue;
+        final other = multiItems.putIfAbsent(
+            connectToIsolateName, () => IsolateGroup(connectToIsolateName));
+        other.addConnect(item);
+        group.addConnectToGroup(other);
       }
 
       for (var element in item.supers) {
@@ -187,7 +204,9 @@ class IsolateEventGeneratorForAnnotation
       ..writeln(
           'abstract class ${_name}MessagerMain extends $className  ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}')
       ..write(writeItems(root, true))
-      ..writeAll(multiItems.values.map((e) => writeMultiIsolate(e.toList())));
+      ..writeAll(multiItems.values
+          // .where((element) => element.connectToGroup.isNotEmpty)
+          .map((e) => writeMultiIsolate(e)));
 
     return buffer.toString();
   }
@@ -316,26 +335,19 @@ class IsolateEventGeneratorForAnnotation
         count++;
       }
       buffer.writeln('\n}\n');
-      var sendEvent = '${lowName(item.className!)}SendEvent';
+      var sendEvent = 'sendEvent';
 
       /// --------------------- Messager -----------------------
-      buffer.writeln('''
+      buffer.write('''
         /// implements [${item.className}]
         mixin ${item.className}Messager on SendEvent {
-          SendEvent get sendEvent;
-          SendEvent get $sendEvent => sendEvent;
-        ''');
-      buffer.writeln('''
-        Iterable<Type>? getProtocols(String name) sync*{
-          if(name == '${lowName(item.isolateName)}'){
+          SendEvent get sendEvent;''');
+      buffer.write('''
+        Iterable<Type> getProtocols(String name) sync*{
+          if(name == '${lowName(item.isolateName)}')
             yield ${item.messagerType}Message;
-          }
-            final prots = super.getProtocols(name);
-            if (prots != null) {
-              yield* prots;
-            }
-        }
-        ''');
+          yield* super.getProtocols(name);
+        }''');
       for (var e in _funcs) {
         final returnType =
             (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
@@ -351,7 +363,7 @@ class IsolateEventGeneratorForAnnotation
         final eRetureType = e.returnType!;
         if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
           buffer.write(
-              ' {\n return $sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
+              ' {return $sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para);');
         } else if (eRetureType.toString() == 'Stream' ||
             eRetureType.toString().startsWith('Stream<')) {
           final unique = e.unique;
@@ -368,348 +380,350 @@ class IsolateEventGeneratorForAnnotation
             named = ',${list.join(',')}';
           }
           buffer.write(
-              '{\n return $sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
+              '{return $sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
         } else {
-          buffer.write('{\n');
+          buffer.write('{');
         }
-        buffer.write('\n}\n\n');
+        buffer.write('}');
       }
-      buffer.write('}\n\n');
+      buffer.write('}');
     }
 
     return buffer.toString();
   }
 
-  String writeMultiIsolate(List<ClassItem> items) {
+  /// ------- multi Isolate generator ----------
+  /// 生成多个[Isolate]mixins
+  /// 初始化时检测协议匹配
+  /// 子隔离之间通信实现，连接时检测协议
+  String writeMultiIsolate(IsolateGroup group) {
+    List<ClassItem> items = group.currentItems.toList();
     if (items.isEmpty) {
       // ignore: avoid_print
       print('.------------error: ${items.length}');
       return '';
     }
+    var isolateName = group.isolateName;
+    final upperIsolateName = upperName(isolateName);
+    final lowIsolateName = lowName(isolateName);
+    final allConnectToIsolate = group.connectToGroup;
+
     final buffer = StringBuffer();
-    var isDefault = false;
-    var isolateName = items.first.isolateName;
 
-    /// ------- multi Isolate generator ----------
-    // if (item.isolateName.isNotEmpty) {
-    final allEnums = <String>{};
-    final _supers = <String>{};
+    var isDefault = group.isolateName.toLowerCase().contains('default');
 
-    void _fore(ClassItem innerItem) {
+    final genEnums = <String>{};
+    final genSupers = <String>{};
+    void clear() {
+      genEnums.clear();
+      genSupers.clear();
+    }
+
+    void getProtocolTypesAndSupers(ClassItem innerItem) {
       if (innerItem.methods.isNotEmpty) {
-        _supers.add(innerItem.messagerType);
+        genSupers.add(innerItem.className!);
 
-        allEnums.add('${innerItem.messagerType}Message');
+        genEnums.add('${innerItem.messagerType}Message');
       }
       for (var element in innerItem.supers) {
         if (element.isolateName == isolateName) {
-          _fore(element);
+          getProtocolTypesAndSupers(element);
         }
       }
     }
 
+    // 获取[method]非空的所有协议[enum],
     for (var item in items) {
-      _fore(item);
+      getProtocolTypesAndSupers(item);
     }
+    final allEnums = List.of(genEnums);
+    final _supers = List.of(genSupers);
+    clear();
 
-    final su = _supers.join(',');
-    // ? items.map((e) => e.className).join(',')
-    // : _supers.join(',');
-    var impl = '';
+    final allSupers = _supers.join(',');
+    final impl = allSupers.isNotEmpty ? ',$allSupers' : '';
 
-    impl = su.isNotEmpty ? ',$su' : '';
+    final sendPortOwnerName = '${lowIsolateName}SendPortOwner';
+    final isolateProtocolsName = '${lowIsolateName}Protocols';
 
-    if (isolateName.toLowerCase().contains('default')) {
-      isDefault = true;
-      // isolateName = '${items.first.className}Default';
-    }
-
-    final upperIsolateName = upperName(isolateName);
-    final lowIsolateName = lowName(isolateName);
-    final lowIsolateNameIsolate = '${lowIsolateName}Isolate';
-    final sendPortOwner = '${lowIsolateNameIsolate}SendPortOwner';
-    var enums = '';
     var protocols = '';
+
     if (allEnums.isNotEmpty) {
-      final buffer = StringBuffer();
-      final pbuffer = StringBuffer();
-      pbuffer
+      final protocolsBuffer = StringBuffer();
+      protocolsBuffer
         ..write('[')
         ..write(allEnums.join(','))
         ..write(',]');
-      buffer
-        ..writeln('switch(messagerType.runtimeType){')
-        ..writeAll(allEnums.map((e) => 'case $e:\n'))
-        ..writeln('return $sendPortOwner;')
-        ..writeln('default:')
-        ..writeln('}');
-      enums = buffer.toString();
-      protocols = pbuffer.toString();
+      protocols = protocolsBuffer.toString();
     }
-    final isolateProtocols = '${lowIsolateName}Protocols';
-    var connectIsolate = '';
-    var connectIsolateAllOwners = '';
-    var connects = '';
-    final connectName = '${isolateName}Connects';
-    var connectToList = '';
-    var protCase = '';
-    if (items.first.connectToIsolate.isNotEmpty) {
-      final buffer = StringBuffer();
-      final cbuffer = StringBuffer();
+    if (allConnectToIsolate.isNotEmpty) {
+      final doConnectIsolateBuffer = StringBuffer();
+      final onResumeCheckNull = StringBuffer();
 
-      for (var item in items.first.connectToIsolate) {
-        final itemLow = lowName(item);
+      final eachProtocolsBuffer = StringBuffer();
+      final owners = StringBuffer();
+      final createIsolate = StringBuffer();
+      final onCreateAllIsolate = StringBuffer();
+      final onMultiSwitch = StringBuffer();
+      final onMultiSwitchDispose = StringBuffer();
+      final onMultiMatchNameGetOnwer = StringBuffer();
+
+      var allProcotols = allConnectToIsolate
+          .map((e) => lowName(e.isolateName))
+          .map((e) => "'$e': ${e}Protocols")
+          .join(',');
+      allProcotols =
+          'Map<String,List<Type>> get ${lowIsolateName}AllProtocols => {$allProcotols,\'$lowIsolateName\': $isolateProtocolsName};';
+
+      /// [Isolate]连接的实现
+      for (var item in allConnectToIsolate) {
+        final itemLow = lowName(item.isolateName);
         final itemProt = '${itemLow}Protocols';
-        final itemOwner = '${itemLow}IsolateSendPortOwner';
-
-        cbuffer.write(
-            'SendPortOwner? get $itemOwner;\n List<Type> get $itemProt;');
-        buffer.writeln(' $sendPortOwner!.localSendPort.send(SendPortName('
-            '\'$item\', $itemOwner!.localSendPort,protocols: $itemProt));');
-      }
-
-      connectToList =
-          'final ${lowIsolateName}ConnectId = \'${lowIsolateName}_connect\';';
-      connectIsolate = buffer.toString();
-      connectIsolateAllOwners = cbuffer.toString();
-    }
-
-    protCase = items.first.connectToIsolate
-        .map((e) => 'prots!.every((e)=> ${lowName(e)}Protocols.contains(e))')
-        .join('||');
-    if (protCase.isNotEmpty) {
-      protCase = '''
-      if($protCase) {
-        Log.i('all prots matched', onlyDebug: false);
-      }else {
-        Log.w('not matched \$prots',onlyDebug: false);
-      }
-        ''';
-    }
-    var onDoneConnect = '';
-
-    //  items.first.connectToIsolate.isEmpty
-    //     ? ''
-    //     : '''
-    //   else if( ${lowIsolateName}ConnectId == sendPortName.name) {
-    //     final prots = sendPortName.protocols;
-    //     if(prots?.isNotEmpty == true) {
-    //       $protCase
-    //     }
-    //     Log.i('local: remote connected, \${sendPortName.name}',onlyDebug: false);
-    //     return;
-    //   }
-    //  ''';
-
-    if (items.first.connects?.isNotEmpty == true) {
-      final buffer = StringBuffer();
-      buffer
-        ..write('[\'')
-        ..writeAll(items.first.connects!.map((e) => lowName(e)), '\',\'')
-        ..write('\']');
-      connects = buffer.toString();
-    }
-    var connectNames = '';
-    var connectRecieive = '';
-    final connectTos = items.first.connectToIsolate;
-    if (connectTos.isNotEmpty) {
-      var conts = '';
-      if (connects.isNotEmpty) {
-        connectNames = 'final $connectName = $connects;';
-        conts = '''
-      for (var item in $connectName) {
-            if(sendPortName.name == item) {
-                  final prots = getProtocols($lowIsolateNameIsolate)?.toList();
-                remoteSendPort!.send(SendPortName('\${item}_connect',localSendPort,protocols: prots,));
-              return;
-            }
-          }
-
-      ''';
-      }
-      var ctos = '';
-      var onClose = '';
-      if (connectTos.isNotEmpty) {
-        final buffer = StringBuffer();
-        buffer.writeAll(connectTos
-            .map((e) => 'SendPortOwner? ${lowName(e)}IsolateSendPortOwner;\n'));
-
-        connectNames = '$connectNames\n $buffer';
-        final cases = connectTos.map((e) => '''
-        case '$e':
-          ${lowName(e)}IsolateSendPortOwner =SendPortOwner(
-              localSendPort: sendPortName.sendPort, remoteSendPort: localSendPort,);
-              final localProts = sendPortName.protocols;
-              final prots = getProtocols('${lowName(e)}')?.toList();
-            // remoteSendPort!.send(SendPortName('${lowIsolateName}_connect',localSendPort,protocols: prots,));
-              if(localProts != null && prots != null) {
-                if(prots.every((e) => localProts.contains(e))) {
-                  Log.w('remote: received ${lowName(e)}, prots: matched',onlyDebug:false);
-                }else{
-                  Log.w('remote: not metched, local:\$localProts, remote: \$prots',onlyDebug: false);
-                }
-              }
-            return;
-        ''').join();
-
-        ctos = '''
-        switch(sendPortName.name) {
-          $cases
-          default:
+        final itemOwner = '${itemLow}SendPortOwner';
+        for (var c in item.currentItems) {
+          getProtocolTypesAndSupers(c);
         }
-        ''';
-        onClose = connectTos
-            .map((e) => '${lowName(e)}IsolateSendPortOwner = null;')
-            .join('\n');
-        onClose = '''
-          FutureOr<bool> onClose() async {
-            $onClose
-            return super.onClose();
-          }
-        ''';
+        final enums = List.of(genEnums);
+        clear();
+        owners.write('SendPortOwner? $itemOwner;');
+        createIsolate.write(
+            'Future<Isolate> createIsolate${upperName(item.isolateName)}(SendPort remoteSendPort);');
+        doConnectIsolateBuffer.write(
+            ' $sendPortOwnerName!.localSendPort.send(SendPortName('
+            '\'$itemLow\', $itemOwner!.localSendPort,protocols: $itemProt));');
+        if (onResumeCheckNull.isNotEmpty) {
+          onResumeCheckNull.write('||');
+        }
+        onResumeCheckNull.write('$itemOwner == null');
+        eachProtocolsBuffer
+          ..write('List<Type> get $itemProt =>')
+          ..write('[')
+          ..write(enums.join(','))
+          ..write(',];');
+        onMultiSwitch.write('''
+        case '$itemLow':
+          $itemOwner = sendPortOwner;
+          break;''');
+        onMultiSwitchDispose.write('''
+        case '$itemLow':
+          $itemOwner = null;
+          return;''');
+        onMultiMatchNameGetOnwer.write('''
+        case '$itemLow':
+          return $itemOwner;''');
+        onCreateAllIsolate.write('''
+       final ${itemLow}task = createIsolate${upperName(item.isolateName)}(remoteSendPort)
+              .then((isolate)=> addNewIsolate('$itemLow',isolate));
+            add(${itemLow}task);''');
       }
+      onMultiSwitch.write('''
+      case '$lowIsolateName':
+        $sendPortOwnerName = sendPortOwner;
+        break;''');
 
-      connectRecieive = '''
-        Iterable<Type>? getProtocols(String name);
-        void onResolveReceivedSendPort(SendPortName sendPortName) {
-          $conts
-          $ctos
-        
-          super.onResolveReceivedSendPort(sendPortName);
-        }
+      if (onResumeCheckNull.isNotEmpty) {
+        onResumeCheckNull.write('||');
+      }
+      onResumeCheckNull.write('$sendPortOwnerName == null');
+      onMultiMatchNameGetOnwer.write('''
+    case '$lowIsolateName':
+      return $sendPortOwnerName;''');
+      onMultiSwitchDispose.write('''
+        case '$lowIsolateName':
+          $sendPortOwnerName = null;
+          return;''');
 
-        $onClose
-        ''';
-    }
+      final setDefaultOwnerGetter = isDefault
+          ? 'SendPortOwner? get defaultSendPortOwner => $sendPortOwnerName;'
+          : '';
 
-    final createIsolate =
-        'Future<Isolate> createIsolate$upperIsolateName(SendPort remoteSendPort);';
-    final createIsolateAll = '''
-      void createAllIsolate(SendPort remoteSendPort,add) {
-            final task = createIsolate$upperIsolateName(remoteSendPort)
-              .then((isolate)=> addNewIsolate($lowIsolateNameIsolate,isolate));
-            add(task);
-            return super.createAllIsolate(remoteSendPort,add);
-          }
-          ''';
-    final onResume = '''
-          void onResume() {
-            if($sendPortOwner == null) {
-              Log.e('sendPortOwner error: current $sendPortOwner == null',onlyDebug: false);
-            }
+      buffer.writeln('''
+        mixin Multi${upperIsolateName}MessagerMixin on SendEvent,Send, SendMultiIsolateMixin $impl {
 
-            $connectIsolate
-
-            super.onResume();
-          }
-    
-          ''';
-    final onDoneMuti = '''
-    if(sendPortName.name == $lowIsolateNameIsolate) {
-      final equal = iterableEquality.equals(sendPortName.protocols,  $isolateProtocols);
-
-      $sendPortOwner = SendPortOwner(localSendPort: sendPortName.sendPort,
-        remoteSendPort: remoteSendPort,);
-      Log.i('init: protocols equal: \$equal | \$$lowIsolateNameIsolate', onlyDebug: false);
-      return;
-    }
-    
-    ''';
-
-    final mesageTypes = items
-        .where((element) => element.methods.isNotEmpty)
-        .map((e) => 'case ${e.messagerType}Message:')
-        .join('\n');
-
-    final getSendPortOwner = '''
-            SendPortOwner? getSendPortOwner(key) {
-              switch(key.runtimeType) {
-                $mesageTypes
-                return ${lowIsolateName}IsolateSendPortOwner;
-                default:
-              }
-          return super.getSendPortOwner(key);
-        }
-    
-    ''';
-    final def = isDefault
-        ? 'SendPortOwner? get defaultSendPortOwner => $sendPortOwner;'
-            '  String get  defaultIsolateName => $lowIsolateNameIsolate;'
-        : '';
-    buffer.writeln('''
-        mixin Multi${upperIsolateName}Mixin on SendEvent,Send, SendMultiIsolateMixin $impl {
-          final String $lowIsolateNameIsolate = '$isolateName';
-          $def
-          SendPortOwner? $sendPortOwner;
-
-          final $isolateProtocols = $protocols;
-
-          $connectToList
-
-          $connectIsolateAllOwners
-
+          $setDefaultOwnerGetter
+          Future<Isolate> createIsolate$upperIsolateName(SendPort remoteSendPort);
           $createIsolate
 
-          $createIsolateAll
+          final $isolateProtocolsName = $protocols;
+          $allProcotols
+          $eachProtocolsBuffer
+
+          SendPortOwner? $sendPortOwnerName;
+          $owners
+
+          void createAllIsolate(SendPort remoteSendPort,add) {
+            final task = createIsolate$upperIsolateName(remoteSendPort)
+              .then((isolate)=> addNewIsolate('$lowIsolateName',isolate));
+            add(task);
+            $onCreateAllIsolate
+            super.createAllIsolate(remoteSendPort,add);
+          }
 
           void onDoneMulti(SendPortName sendPortName, SendPort remoteSendPort) {
-            $onDoneMuti$onDoneConnect
-
+             final protocols = ${lowIsolateName}AllProtocols[sendPortName.name];
+            if (protocols != null) {
+              final equal = iterableEquality.equals(sendPortName.protocols, protocols);
+                final sendPortOwner = SendPortOwner(
+                localSendPort: sendPortName.sendPort,
+                remoteSendPort: remoteSendPort,
+              );
+              switch(sendPortName.name) {
+                $onMultiSwitch
+                default:
+              }
+              Log.i('init: protocol status: \$equal | \${sendPortName.name}',
+                  onlyDebug: false);
+              return;
+            }
             super.onDoneMulti(sendPortName, remoteSendPort);
           }
           
-          $onResume
+          void onResume() {
+            if($onResumeCheckNull){
+              Log.e('sendPortOwner error',onlyDebug: false);
+            }
+            $doConnectIsolateBuffer
+            super.onResume();
+          }
+    
 
           SendPortOwner? getSendPortOwner(messagerType) {
-            $enums
-            if(messagerType == $lowIsolateNameIsolate) {
-              return $sendPortOwner;
+            var matchName = '';
+            if(messagerType is String){
+              matchName = messagerType;
+            } else {
+              for(var entry in ${lowIsolateName}AllProtocols.entries) {
+                if(entry.value.contains(messagerType.runtimeType)) {
+                  matchName = entry.key;
+                  break;
+                }
+              }
+            }
+            switch(matchName) {
+              $onMultiMatchNameGetOnwer
+              default:
             }
             return super.getSendPortOwner(messagerType);
           }
 
           void disposeIsolate(String isolateName) {
-            if(isolateName == $lowIsolateNameIsolate){
-              $sendPortOwner = null;
-              return;
+            switch(isolateName) {
+              $onMultiSwitchDispose
+              default:
             }
-            return super.disposeIsolate(isolateName);
+            super.disposeIsolate(isolateName);
           }
         }
 
-        /// 在[Resolve]中为`Messager`提供便携
-        mixin Multi${upperIsolateName}ResolveMixin on Send, ResolveMixin {
-          bool add(message);
+        ${genResolveMixinMessager(upperIsolateName, lowIsolateName, group)}
 
-          final String $lowIsolateNameIsolate = '$isolateName';
-          $connectNames
-          $connectRecieive
+        ''');
+    }
+    buffer.write('''
+      mixin Multi${upperIsolateName}OnResumeMixin on ResolveMixin $impl {
+        void onResumeResolve() {
+          if (remoteSendPort != null)
+            remoteSendPort!.send(SendPortName('$lowIsolateName',localSendPort,protocols: $protocols,));
+          super.onResumeResolve();
+        }
+      }''');
+    return buffer.toString();
+  }
+
+  //// ----------- Resolve mixin Messager -----------------------------------
+  String genResolveMixinMessager(
+      String upperIsolateName, String lowIsolateName, IsolateGroup group) {
+    var connectRecieiveSendPort = '';
+    var connectToIsolate = group.connectToGroup.map((e) => e.isolateName);
+    if (connectToIsolate.isNotEmpty) {
+      final connectTos = connectToIsolate;
+
+      var onReceivedSendPort = '';
+      var onClose = '';
+
+      var getSendPortOwnerConnectTos = '';
+      final connectToAllCasesBuffer = StringBuffer();
+      for (var connctTo in group.connectToGroup) {
+        final mesageTypesConnects = connctTo.currentItems
+            .where((element) => element.methods.isNotEmpty)
+            .map((e) => 'case ${e.messagerType}Message:')
+            .join('');
+        connectToAllCasesBuffer.writeln('''
+        $mesageTypesConnects
+        return ${lowName(connctTo.isolateName)}SendPortOwner;''');
+      }
+      if (connectToAllCasesBuffer.isNotEmpty) {
+        getSendPortOwnerConnectTos = '''
+      SendPortOwner? getSendPortOwner(key) {
+      switch(key.runtimeType) {
+        $connectToAllCasesBuffer
+        default:
+      }
+      return super.getSendPortOwner(key);
+      }''';
+      }
+
+      final cases = connectTos.map((e) => '''
+        case '$e':
+          ${lowName(e)}SendPortOwner = sendPortOwner;
+          return;''').join('\n');
+      onReceivedSendPort = '''
+              final sendPortOwner = SendPortOwner(
+                localSendPort: sendPortName.sendPort,
+                remoteSendPort: localSendPort,
+              );
+              final localProts = sendPortName.protocols;
+              final prots = getProtocols(sendPortName.name).toList();
+              if (localProts != null) {
+                if (prots.every((e) => localProts.contains(e))) {
+                  Log.w('$lowIsolateName: received \${sendPortName.name}, prots: matched',
+                      onlyDebug: false);
+                } else {
+                  Log.w('$lowIsolateName: not metched, \${sendPortName.name}:\$localProts, remote: \$prots',
+                      onlyDebug: false);
+                }
+              }
+              switch (sendPortName.name) {
+                $cases
+                default:
+              }''';
+      onClose = connectTos
+          .map((e) => '${lowName(e)}SendPortOwner = null;')
+          .join('\n');
+
+      final getConnectNames = connectTos
+          .map((e) => 'SendPortOwner? ${lowName(e)}SendPortOwner;')
+          .join('\n');
+
+      connectRecieiveSendPort = '''
+        void onResolveReceivedSendPort(SendPortName sendPortName) {
+          $onReceivedSendPort
+          super.onResolveReceivedSendPort(sendPortName);
+        }
+
+        $getSendPortOwnerConnectTos
+
+        FutureOr<bool> onClose() async {
+          $onClose
+          return super.onClose();
+        }
+        ''';
+
+      connectRecieiveSendPort = '''
+    /// 在[Resolve]中为`Messager`提供便携
+        mixin Multi${upperIsolateName}Mixin on Send, SendEvent, ResolveMixin {
+
+          $getConnectNames
+          $connectRecieiveSendPort
 
           bool listenResolve(message) {
             if (add(message)) return true;
             return super.listenResolve(message);
           }
         }
-
-        mixin Multi${upperIsolateName}OwnerMixin on SendEvent {
-        SendPortOwner? get $sendPortOwner;
-          $getSendPortOwner
-        }
-
-        mixin Multi${upperIsolateName}OnResumeMixin on ResolveMixin $impl {
-           void onResumeResolve() {
-              if (remoteSendPort != null) {
-                remoteSendPort!.send(SendPortName('$isolateName',localSendPort,protocols: $protocols,));
-              }
-              super.onResumeResolve();
-           }
-        }
-
-
-
-        ''');
-
-    return buffer.toString();
+    ''';
+    }
+    return connectRecieiveSendPort;
   }
 
   List<String> getTypes(ClassItem item) {
