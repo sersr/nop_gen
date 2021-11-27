@@ -11,7 +11,12 @@ class IsolateGroup {
   IsolateGroup(this.isolateName);
   final String isolateName;
   final connectToGroup = <IsolateGroup>{};
+
+  /// 要连接此`isolateName`Isolate
+  /// `connects`可能拥有相同的`isolate`
   final Set<ClassItem> connects = {};
+
+  /// 当前`isolateName`支持的协议
   final Set<ClassItem> currentItems = {};
   void addConnectToGroup(IsolateGroup group) {
     connectToGroup.add(group);
@@ -36,7 +41,7 @@ class ClassItem {
   final methods = <Methods>[];
   String isolateName = '';
   List<String> connectToIsolate = const [];
-
+  List<ClassItem> privateProtocols = const [];
   @override
   String toString() {
     return '$runtimeType: $className';
@@ -165,11 +170,15 @@ class IsolateEventGeneratorForAnnotation
         item.connectToIsolate = parentItem.connectToIsolate;
         item.isolateName = parentItem.isolateName;
       }
+      for (var element in item.privateProtocols) {
+        element.isolateName = item.isolateName;
+        element.connectToIsolate = item.connectToIsolate;
+      }
 
       final group = multiItems.putIfAbsent(
           item.isolateName, () => IsolateGroup(item.isolateName));
       group.addCurerntItem(item);
-
+      item.privateProtocols.forEach(group.addCurerntItem);
       final connectTo = item.connectToIsolate;
       for (var connectToIsolateName in connectTo) {
         if (connectToIsolateName == item.isolateName) continue;
@@ -200,13 +209,11 @@ class IsolateEventGeneratorForAnnotation
         _allItemsMessager.isNotEmpty ? 'SendEvent,$_allItemsMessager' : '';
     buffer
       ..writeln('''
-        abstract class ${_name}ResolveMain extends $className with Resolve$mix {}''')
+        abstract class ${_name}ResolveMain extends $className with ListenMixin, Resolve$mix {}''')
       ..writeln(
           'abstract class ${_name}MessagerMain extends $className  ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}')
       ..write(writeItems(root, true))
-      ..writeAll(multiItems.values
-          // .where((element) => element.connectToGroup.isNotEmpty)
-          .map((e) => writeMultiIsolate(e)));
+      ..writeAll(multiItems.values.map((e) => writeMultiIsolate(e)));
 
     return buffer.toString();
   }
@@ -250,6 +257,9 @@ class IsolateEventGeneratorForAnnotation
         return getMethods(e);
       }));
       _supers.addAll(getSupers(item).whereType<String>());
+    }
+    if (item.privateProtocols.isNotEmpty) {
+      buffer.writeAll(item.privateProtocols.map((e) => writeItems(e)));
     }
 
     final _implements = <String>[];
@@ -424,6 +434,9 @@ class IsolateEventGeneratorForAnnotation
         genSupers.add(innerItem.className!);
 
         genEnums.add('${innerItem.messagerType}Message');
+        for (var item in innerItem.privateProtocols) {
+          getProtocolTypesAndSupers(item);
+        }
       }
       for (var element in innerItem.supers) {
         if (element.isolateName == isolateName) {
@@ -441,6 +454,7 @@ class IsolateEventGeneratorForAnnotation
     clear();
 
     final allSupers = _supers.join(',');
+    final supersResolve = _supers.map((e) => '${e}Resolve').join(',');
     final impl = allSupers.isNotEmpty ? ',$allSupers' : '';
 
     final sendPortOwnerName = '${lowIsolateName}SendPortOwner';
@@ -538,7 +552,7 @@ class IsolateEventGeneratorForAnnotation
           : '';
 
       buffer.writeln('''
-        mixin Multi${upperIsolateName}MessagerMixin on SendEvent,Send, SendMultiIsolateMixin $impl {
+        mixin Multi${upperIsolateName}MessagerMixin on SendEvent,Send,ListenMixin, SendMultiIsolateMixin /*impl*/ {
 
           $setDefaultOwnerGetter
           Future<Isolate> createIsolate$upperIsolateName(SendPort remoteSendPort);
@@ -559,13 +573,14 @@ class IsolateEventGeneratorForAnnotation
             super.createAllIsolate(remoteSendPort,add);
           }
 
-          void onDoneMulti(SendPortName sendPortName, SendPort remoteSendPort) {
+          void onListenReceivedSendPort(SendPortName sendPortName) {
              final protocols = ${lowIsolateName}AllProtocols[sendPortName.name];
             if (protocols != null) {
-              final equal = iterableEquality.equals(sendPortName.protocols, protocols);
-                final sendPortOwner = SendPortOwner(
+              final equal = sendPortName.protocols != null &&
+                sendPortName.protocols!.every(protocols.contains);
+              final sendPortOwner = SendPortOwner(
                 localSendPort: sendPortName.sendPort,
-                remoteSendPort: remoteSendPort,
+                remoteSendPort: localSendPort,
               );
               switch(sendPortName.name) {
                 $onMultiSwitch
@@ -575,15 +590,15 @@ class IsolateEventGeneratorForAnnotation
                   onlyDebug: false);
               return;
             }
-            super.onDoneMulti(sendPortName, remoteSendPort);
+            super.onListenReceivedSendPort(sendPortName);
           }
           
-          void onResume() {
+          void onResumeListen() {
             if($onResumeCheckNull){
               Log.e('sendPortOwner error',onlyDebug: false);
             }
             $doConnectIsolateBuffer
-            super.onResume();
+            super.onResumeListen();
           }
     
 
@@ -615,18 +630,44 @@ class IsolateEventGeneratorForAnnotation
           }
         }
 
-        ${genResolveMixinMessager(upperIsolateName, lowIsolateName, group)}
-
+        abstract class Multi${upperIsolateName}ResolveMain  with
+        Send,
+        SendEvent,
+        ListenMixin,
+        Resolve,
+        Multi${upperIsolateName}Mixin,
+        $supersResolve {}
         ''');
     }
-    buffer.write('''
-      mixin Multi${upperIsolateName}OnResumeMixin on ResolveMixin $impl {
-        void onResumeResolve() {
+
+    final creceive =
+        genResolveMixinMessager(upperIsolateName, lowIsolateName, group);
+    if (creceive.isNotEmpty) {
+      buffer.write(creceive);
+      buffer.write('''
+        void onResumeListen() {
           if (remoteSendPort != null)
             remoteSendPort!.send(SendPortName('$lowIsolateName',localSendPort,protocols: $protocols,));
-          super.onResumeResolve();
+          super.onResumeListen();
         }
       }''');
+    } else if (group.connects.isNotEmpty) {
+      buffer.write('''
+
+      abstract class Multi${upperIsolateName}ResolveMain  with
+        ListenMixin,
+        Resolve,
+        $supersResolve,
+        Multi${upperIsolateName}OnResumeMixin
+         {}
+      mixin Multi${upperIsolateName}OnResumeMixin on Resolve /*impl*/ {
+        void onResumeListen() {
+          if (remoteSendPort != null)
+            remoteSendPort!.send(SendPortName('$lowIsolateName',localSendPort,protocols: $protocols,));
+          super.onResumeListen();
+        }
+      }''');
+    }
     return buffer.toString();
   }
 
@@ -647,6 +688,7 @@ class IsolateEventGeneratorForAnnotation
         final mesageTypesConnects = connctTo.currentItems
             .where((element) => element.methods.isNotEmpty)
             .map((e) => 'case ${e.messagerType}Message:')
+            .toSet()
             .join('');
         connectToAllCasesBuffer.writeln('''
         $mesageTypesConnects
@@ -696,9 +738,9 @@ class IsolateEventGeneratorForAnnotation
           .join('\n');
 
       connectRecieiveSendPort = '''
-        void onResolveReceivedSendPort(SendPortName sendPortName) {
+        void onListenReceivedSendPort(SendPortName sendPortName) {
           $onReceivedSendPort
-          super.onResolveReceivedSendPort(sendPortName);
+          super.onListenReceivedSendPort(sendPortName);
         }
 
         $getSendPortOwnerConnectTos
@@ -710,17 +752,17 @@ class IsolateEventGeneratorForAnnotation
         ''';
 
       connectRecieiveSendPort = '''
-    /// 在[Resolve]中为`Messager`提供便携
-        mixin Multi${upperIsolateName}Mixin on Send, SendEvent, ResolveMixin {
+        /// 在[Resolve]中为`Messager`提供便携
+        mixin Multi${upperIsolateName}Mixin on Send, SendEvent, Resolve {
 
           $getConnectNames
           $connectRecieiveSendPort
 
-          bool listenResolve(message) {
+          bool listen(message) {
             if (add(message)) return true;
-            return super.listenResolve(message);
+            return super.listen(message);
           }
-        }
+
     ''';
     }
     return connectRecieiveSendPort;
@@ -734,16 +776,19 @@ class IsolateEventGeneratorForAnnotation
     if (item.separate) {
       _list.addAll(item.supers.expand((e) => getTypes(e)));
     }
-    return _list;
+    // _list.addAll(item.privateProtocols.expand((e) => getTypes(e)));
+
+    return _list.toSet().toList();
   }
 
   String writeMessageEnum(ClassItem item, [bool root = false]) {
     final buffer = StringBuffer();
 
-    final _funcs = <String>[];
+    final _funcs = <String>{};
     _funcs.addAll(item.methods.map((e) => e.name!));
     if (root || item.separate) {
       buffer.writeAll(item.supers.map((e) => writeMessageEnum(e)));
+      buffer.writeAll(item.privateProtocols.map((e) => writeMessageEnum(e)));
     } else {
       _funcs.addAll(item.supers.expand((e) => e.methods.map((e) => e.name!)));
     }
@@ -779,7 +824,11 @@ class IsolateEventGeneratorForAnnotation
         final isolateName = meta?.getField('isolateName')?.toStringValue();
         final connectToIsolate =
             meta?.getField('connectToIsolate')?.toListValue();
-        // final create = meta?.getField('create')?.toBoolValue();
+        final privateProtocols = meta
+            ?.getField('privateProtocols')
+            ?.toListValue()
+            ?.map((e) => e.toTypeValue()?.element)
+            .whereType<Element>();
 
         if (messageName != null &&
             separate != null &&
@@ -793,6 +842,28 @@ class IsolateEventGeneratorForAnnotation
                 .map((e) => e.toStringValue())
                 .whereType<String>()
                 .toList();
+          }
+          if (privateProtocols?.isNotEmpty == true) {
+            final privates = <ClassItem>{};
+            for (var item in privateProtocols!) {
+              if (item is ClassElement) {
+                final curent = gen(item, null);
+                // final privateinterfaces = item.interfaces
+                //     .map((e) => gen(e.element, null))
+                //     .whereType<ClassItem>();
+
+                // final privatemixins = item.mixins
+                //     .map((e) => gen(e.element, null))
+                //     .whereType<ClassItem>();
+                if (curent != null) {
+                  privates.add(curent);
+                }
+                // privates
+                //   ..addAll(privateinterfaces)
+                //   ..addAll(privatemixins);
+              }
+            }
+            _item.privateProtocols = privates.toList();
           }
 
           if (messageName.isNotEmpty) _item.messagerType = messageName;
