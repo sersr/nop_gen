@@ -18,6 +18,7 @@ class _ColumnInfo {
     'double': 'DOUBLE',
     'List<int>': 'BLOB',
     'bool': 'INTEGER',
+    'DateTime': 'TEXT'
   };
   bool get isPrimaryKey => _isPrimaryKey ?? false;
   bool get isBool => type == 'bool';
@@ -35,7 +36,9 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
       Element element, ConstantReader annotation, BuildStep buildStep) {
     final buffer = StringBuffer();
     buffer
-        .writeln('// ignore_for_file: curly_braces_in_flow_control_structures');
+      ..writeln('// ignore_for_file: curly_braces_in_flow_control_structures')
+      ..writeln('// ignore_for_file: non_constant_identifier_names\n\n');
+
     final tables = <DartType?>[];
 
     if (element is ClassElement) {
@@ -217,6 +220,8 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
   final _parMap = columnInfos.map((e) {
     if (e.isBool) {
       return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
+    } else if (e.type == 'DateTime') {
+      return '${e.name}: DateTime.tryParse(map[\'${e.nameDb}\'] as String? ??\'\')';
     } else if (e.isJson) {
       return '${e.name}: _${e.typeJson}ToTable(map[\'${e.nameDb}\'])';
     }
@@ -305,7 +310,7 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       info.typeJson = _type;
     }
     info.type ??= _type;
-    if (info.typeDb == null && info.isJson) {
+    if (info.typeDb == null && !info.isJson) {
       // ignore: avoid_print
       print('不支持的类型没有提供具体类型 如：`@NopItem(type: String)`');
     }
