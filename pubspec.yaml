@@ -9,16 +9,8 @@ environment:
 
 dependencies:
   source_gen: any
-  # nop_annotations:
-  #   git: 
-  #     url: https://github.com/sersr/nop_annotations
-  #     ref: master
   nop_annotations:
     path: ../nop_annotations
-  # nop_db:
-  #   git: 
-  #     url: https://github.com/sersr/nop_db
-  #     ref: master
   nop_db:
     path: ../nop_db
 dev_dependencies:

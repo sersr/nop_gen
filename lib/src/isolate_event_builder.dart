@@ -491,7 +491,7 @@ class IsolateEventGeneratorForAnnotation
         final enums = List.of(genEnums);
         clear();
         createRemoteServer.write(
-            'Future<Isolate> createRemoteServer${upperName(item.isolateName)}();');
+            'Future<RemoteServer> createRemoteServer${upperName(item.isolateName)}();');
         doConnectIsolateBuffer.write(
             '''sendPortOwners['$lowIsolateName']!.localSendPort.send(SendPortName(
             '$itemLow', sendPortOwners['$itemLow']!.localSendPort,protocols: allProtocols['$itemLow']));
@@ -502,10 +502,10 @@ class IsolateEventGeneratorForAnnotation
           ..write("yield const MapEntry('$itemLow',")
           ..write('[')
           ..write(enums.join(','))
-          ..write('];');
+          ..write(']);');
 
         yiledAllServer.write('''
-         yield MapEntry('$itemLow': createRemoteServer${upperName(item.isolateName)});''');
+         yield MapEntry('$itemLow', createRemoteServer${upperName(item.isolateName)});''');
       }
 
       var allProcotols =
@@ -652,6 +652,11 @@ class IsolateEventGeneratorForAnnotation
         void onListenReceivedSendPort(SendPortName sendPortName) {
           $onReceivedSendPort
           onResume();
+        }
+
+        bool listen(message) {
+          if (add(message)) return true;
+          return super.listen(message);
         }
 
         $getSendPortOwnerConnectTos
