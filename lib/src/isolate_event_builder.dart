@@ -10,7 +10,7 @@ import 'package:analyzer/dart/element/element.dart';
 class IsolateGroup {
   IsolateGroup(this.isolateName);
   final String isolateName;
-  final connectToGroup = <IsolateGroup>{};
+  final connectToOthersGroup = <IsolateGroup>{};
 
   /// 要连接此`isolateName`Isolate
   /// `connects`可能拥有相同的`isolate`
@@ -19,7 +19,7 @@ class IsolateGroup {
   /// 当前`isolateName`支持的协议
   final Set<ClassItem> currentItems = {};
   void addConnectToGroup(IsolateGroup group) {
-    connectToGroup.add(group);
+    connectToOthersGroup.add(group);
   }
 
   void addConnect(ClassItem item) {
@@ -279,6 +279,7 @@ class IsolateEventGeneratorForAnnotation
         buffer.write('}');
       }
     }
+    final lowIsolateName = lowName(item.isolateName);
 
     /// ------------ Resolve -------------------------------------
     if (_funcs.isNotEmpty) {
@@ -296,11 +297,15 @@ class IsolateEventGeneratorForAnnotation
           'mixin ${item.className}Resolve on Resolve implements $impl {\n');
       buffer
         ..write(
-            'late final _${_n}ResolveFuncList = List<DynamicCallback>.unmodifiable(')
+            'late final _${_n}ResolveFuncList = List<Function>.unmodifiable(')
         ..write(
             '${List.generate(_funcs.length, (index) => '_${_funcs[index].name}_$index')}')
         ..writeln(');')
         ..writeln('''
+            Iterable<MapEntry<String, Type>> getResolveProtocols() sync* {
+              yield const MapEntry('$lowIsolateName',${item.messagerType}Message);
+              yield* super.getResolveProtocols();
+          }
         bool on${item.messagerType}Resolve(message) => false;
         @override
         bool resolve(resolveMessage) {
@@ -349,18 +354,16 @@ class IsolateEventGeneratorForAnnotation
       var sendEvent = 'sendEvent';
 
       /// --------------------- Messager -----------------------\
-      final lowIsolateName = lowName(item.isolateName);
       buffer.write('''
         /// implements [${item.className}]
         mixin ${item.className}Messager on SendEvent {
-          SendEvent get sendEvent;''');
-      buffer.write('''
-        String get $lowIsolateName => '$lowIsolateName';
-        Iterable<Type> getProtocols(String name) sync*{
-          if(name == $lowIsolateName)
-            yield ${item.messagerType}Message;
-          yield* super.getProtocols(name);
-        }''');
+          SendEvent get sendEvent;
+          String get $lowIsolateName => '$lowIsolateName';
+          Iterable<MapEntry<String,Type>> getProtocols() sync*{
+            yield MapEntry($lowIsolateName,${item.messagerType}Message);
+            yield* super.getProtocols();
+          }
+        ''');
       for (var e in _funcs) {
         final returnType =
             (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
@@ -419,7 +422,7 @@ class IsolateEventGeneratorForAnnotation
     var isolateName = group.isolateName;
     final upperIsolateName = upperName(isolateName);
     final lowIsolateName = lowName(isolateName);
-    final allConnectToIsolate = group.connectToGroup;
+    final connectToOtherIsolates = group.connectToOthersGroup;
 
     final buffer = StringBuffer();
 
@@ -452,30 +455,17 @@ class IsolateEventGeneratorForAnnotation
     for (var item in items) {
       getProtocolTypesAndSupers(item);
     }
-    final allEnums = List.of(genEnums);
     final _supers = List.of(genSupers);
     clear();
 
     final allSupers = _supers.join(',');
     final supersResolve = _supers.map((e) => '${e}Resolve').join(',');
+    // ignore: unused_local_variable
     final impl = allSupers.isNotEmpty ? ',$allSupers' : '';
 
-    final sendPortOwnerName = '${lowIsolateName}SendPortOwner';
-
-    var protocols = '';
-
-    if (allEnums.isNotEmpty) {
-      final protocolsBuffer = StringBuffer();
-      protocolsBuffer
-        ..write('[')
-        ..write(allEnums.join(','))
-        ..write(']');
-      protocols = protocolsBuffer.toString();
-    }
     if (isDefault) {
       final doConnectIsolateBuffer = StringBuffer();
 
-      final eachProtocolsBuffer = StringBuffer();
       final createRemoteServer = StringBuffer();
       final yiledAllServer = StringBuffer();
 
@@ -483,33 +473,22 @@ class IsolateEventGeneratorForAnnotation
           ''' yield MapEntry('$lowIsolateName',createRemoteServer$upperIsolateName);''');
 
       /// [Isolate]连接的实现
-      for (var item in allConnectToIsolate) {
+      for (var item in connectToOtherIsolates) {
         final itemLow = lowName(item.isolateName);
         for (var c in item.currentItems) {
           getProtocolTypesAndSupers(c);
         }
-        final enums = List.of(genEnums);
         clear();
         createRemoteServer.write(
             'Future<RemoteServer> createRemoteServer${upperName(item.isolateName)}();');
         doConnectIsolateBuffer.write(
             '''sendPortOwners['$lowIsolateName']!.localSendPort.send(SendPortName(
-            '$itemLow', sendPortOwners['$itemLow']!.localSendPort,protocols: allProtocols['$itemLow']));
-
+            '$itemLow', sendPortOwners['$itemLow']!.localSendPort,protocols: getResolveProtocols('$itemLow')));
             ''');
-
-        eachProtocolsBuffer
-          ..write("yield const MapEntry('$itemLow',")
-          ..write('[')
-          ..write(enums.join(','))
-          ..write(']);');
 
         yiledAllServer.write('''
          yield MapEntry('$itemLow', createRemoteServer${upperName(item.isolateName)});''');
       }
-
-      var allProcotols =
-          '''yield const MapEntry('$lowIsolateName',$protocols);$eachProtocolsBuffer''';
 
       final setDefaultOwnerGetter = isDefault
           ? 'String get defaultSendPortOwnerName => \'$lowIsolateName\';'
@@ -523,164 +502,37 @@ class IsolateEventGeneratorForAnnotation
       '''
           : '';
       buffer.writeln('''
-      
         mixin Multi${upperIsolateName}MessagerMixin on SendEvent,ListenMixin, SendMultiServerMixin /*impl*/ {
-
           $setDefaultOwnerGetter
           Future<RemoteServer> createRemoteServer$upperIsolateName();
           $createRemoteServer
-
           Iterable<MapEntry<String,CreateRemoteServer>> createRemoteServerIterable() sync* {
             $yiledAllServer
             yield* super.createRemoteServerIterable();
           }
-          Iterable<MapEntry<String, List<Type>>> allProtocolsItreable() sync* {
-           $allProcotols
-            yield* super.allProtocolsItreable();
-          }
-         $doConnectIsolate
+          $doConnectIsolate
         }
-
         ''');
     }
 
-    final creceive =
-        genResolveMixinMessager(upperIsolateName, lowIsolateName, group);
-
-    var all = '';
-    if (allConnectToIsolate.isNotEmpty) {
-      all = 'SendEvent,';
-    }
-    if (creceive.isNotEmpty) {
-      buffer.write('''  abstract class Multi${upperIsolateName}ResolveMain  with
-        $all
+    if (connectToOtherIsolates.isNotEmpty) {
+      buffer.write('''
+        abstract class Multi${upperIsolateName}ResolveMain  with
+        SendEvent,
         ListenMixin,
         Resolve,
-        Multi${upperIsolateName}Mixin,
-        $supersResolve {}''');
-      buffer.write(creceive);
-      buffer.write('''
-        void onResumeListen() {
-          if (remoteSendPort != null)
-            remoteSendPort!.send(SendPortName('$lowIsolateName',localSendPort,protocols: $protocols,));
-          super.onResumeListen();
-        }
-      }''');
+        ResolveMultiRecievedMixin,
+        $supersResolve {}
+        ''');
     } else if (group.connects.isNotEmpty) {
       buffer.write('''
-
       abstract class Multi${upperIsolateName}ResolveMain  with
         ListenMixin,
         Resolve,
-        $supersResolve,
-        Multi${upperIsolateName}OnResumeMixin
-         {}
-      mixin Multi${upperIsolateName}OnResumeMixin on Resolve /*impl*/ {
-        void onResumeListen() {
-          if (remoteSendPort != null)
-            remoteSendPort!.send(SendPortName('$lowIsolateName',localSendPort,protocols: $protocols,));
-          super.onResumeListen();
-        }
-      }''');
+        $supersResolve
+         {}''');
     }
     return buffer.toString();
-  }
-
-  //// ----------- Resolve mixin Messager -----------------------------------
-  String genResolveMixinMessager(
-      String upperIsolateName, String lowIsolateName, IsolateGroup group) {
-    var connectRecieiveSendPort = '';
-    var connectToIsolate = group.connectToGroup.map((e) => e.isolateName);
-    if (connectToIsolate.isNotEmpty) {
-      final connectTos = connectToIsolate;
-
-      var onReceivedSendPort = '';
-      var onClose = '';
-
-      var getSendPortOwnerConnectTos = '';
-      final connectToAllCasesBuffer = StringBuffer();
-      for (var connectTo in group.connectToGroup) {
-        connectToAllCasesBuffer.writeln('''
-        case '${connectTo.isolateName}':
-        return ${lowName(connectTo.isolateName)}SendPortOwner;''');
-      }
-      if (connectToAllCasesBuffer.isNotEmpty) {
-        getSendPortOwnerConnectTos = '''
-      SendPortOwner? getSendPortOwner(isolateName) {
-      switch(isolateName) {
-        $connectToAllCasesBuffer
-        default:
-      }
-      return super.getSendPortOwner(isolateName);
-      }''';
-      }
-
-      final cases = connectTos.map((e) => '''
-        case '$e':
-          ${lowName(e)}SendPortOwner = sendPortOwner;
-          break;''').join('\n');
-      onReceivedSendPort = '''
-              final sendPortOwner = SendPortOwner(
-                localSendPort: sendPortName.sendPort,
-                remoteSendPort: localSendPort,
-              );
-              final localProts = sendPortName.protocols;
-              if (localProts != null) {
-                final prots = getProtocols(sendPortName.name).toList();
-                final success = prots.every((e) => localProts.contains(e));
-                Log.w(
-                    'eventDefault: received \${sendPortName.name}, prots:\${success ? '' : ' not'} matched',
-                    onlyDebug: false);
-              } else {
-                Log.e('\${sendPortName.name} protocols isEmpty', onlyDebug: false);
-              }
-              switch (sendPortName.name) {
-                $cases
-                default:
-                  super.onListenReceivedSendPort(sendPortName);
-                  return;
-              }''';
-      onClose = connectTos
-          .map((e) => '${lowName(e)}SendPortOwner = null;')
-          .join('\n');
-
-      final getConnectNames = connectTos
-          .map((e) => 'SendPortOwner? ${lowName(e)}SendPortOwner;')
-          .join('\n');
-
-      connectRecieiveSendPort = '''
-        void onListenReceivedSendPort(SendPortName sendPortName) {
-          $onReceivedSendPort
-          onResume();
-        }
-
-        bool listen(message) {
-          if (add(message)) return true;
-          return super.listen(message);
-        }
-
-        $getSendPortOwnerConnectTos
-
-        FutureOr<bool> onClose() async {
-          $onClose
-          return super.onClose();
-        }
-        ''';
-
-      connectRecieiveSendPort = '''
-          $getConnectNames
-          $connectRecieiveSendPort
-    ''';
-    }
-    var all = '';
-    if (connectRecieiveSendPort.isNotEmpty) {
-      all = 'SendEvent,';
-    }
-    connectRecieiveSendPort = '''
-        mixin Multi${upperIsolateName}Mixin on $all Resolve {
-          $connectRecieiveSendPort
-    ''';
-    return connectRecieiveSendPort;
   }
 
   List<String> getTypes(ClassItem item) {
