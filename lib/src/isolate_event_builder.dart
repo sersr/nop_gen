@@ -42,6 +42,7 @@ class ClassItem {
   String isolateName = '';
   List<String> connectToIsolate = const [];
   List<ClassItem> privateProtocols = const [];
+  bool isProtocols = false;
   @override
   String toString() {
     return '$runtimeType: $className';
@@ -174,6 +175,7 @@ class IsolateEventGeneratorForAnnotation
       for (var element in item.privateProtocols) {
         element.isolateName = item.isolateName;
         element.connectToIsolate = item.connectToIsolate;
+        element.isProtocols = true;
       }
 
       final group = multiItems.putIfAbsent(
@@ -428,32 +430,31 @@ class IsolateEventGeneratorForAnnotation
 
     var isDefault = group.isolateName.toLowerCase().contains('default');
 
-    final genEnums = <String>{};
     final genSupers = <String>{};
     void clear() {
-      genEnums.clear();
       genSupers.clear();
     }
 
-    void getProtocolTypesAndSupers(ClassItem innerItem) {
+    void getSupers(ClassItem innerItem) {
       if (innerItem.methods.isNotEmpty) {
-        genSupers.add(innerItem.className!);
-
-        genEnums.add('${innerItem.messagerType}Message');
-        for (var item in innerItem.privateProtocols) {
-          getProtocolTypesAndSupers(item);
+        if (innerItem.parent?.separate == true) {
+          genSupers.add(innerItem.className!);
         }
+      }
+      if (innerItem.isProtocols) {
+        genSupers.add(innerItem.className!);
+        return;
       }
       for (var element in innerItem.supers) {
         if (element.isolateName == isolateName) {
-          getProtocolTypesAndSupers(element);
+          getSupers(element);
         }
       }
     }
 
     // 获取[method]非空的所有协议[enum],
     for (var item in items) {
-      getProtocolTypesAndSupers(item);
+      getSupers(item);
     }
     final _supers = List.of(genSupers);
     clear();
@@ -476,14 +477,14 @@ class IsolateEventGeneratorForAnnotation
       for (var item in connectToOtherIsolates) {
         final itemLow = lowName(item.isolateName);
         for (var c in item.currentItems) {
-          getProtocolTypesAndSupers(c);
+          getSupers(c);
         }
         clear();
         createRemoteServer.write(
             'Future<RemoteServer> createRemoteServer${upperName(item.isolateName)}();');
         doConnectIsolateBuffer.write(
             '''sendPortOwners['$lowIsolateName']!.localSendPort.send(SendPortName(
-            '$itemLow', sendPortOwners['$itemLow']!.localSendPort,protocols: getResolveProtocols('$itemLow')));
+            '$itemLow', sendPortOwners['$itemLow']!.localSendPort,protocols: getServerProtocols('$itemLow')));
             ''');
 
         yiledAllServer.write('''
@@ -512,11 +513,6 @@ class IsolateEventGeneratorForAnnotation
           }
           $doConnectIsolate
         }
-        ''');
-    }
-
-    if (connectToOtherIsolates.isNotEmpty) {
-      buffer.write('''
         abstract class Multi${upperIsolateName}ResolveMain  with
         SendEvent,
         ListenMixin,
@@ -601,7 +597,7 @@ class IsolateEventGeneratorForAnnotation
             separate != null &&
             isolateName != null &&
             connectToIsolate != null) {
-          _item.separate = separate;
+          if (!_item.separate) _item.separate = separate;
           _item.isolateName = isolateName;
           if ((parent == null || _item.isolateName.isNotEmpty) &&
               connectToIsolate.isNotEmpty) {
@@ -638,6 +634,7 @@ class IsolateEventGeneratorForAnnotation
         }
       } else if (type == 'NopIsolateEvent') {
         rootResolveName = meta?.getField('resolveName')?.toStringValue();
+        _item.separate = true;
       }
       return false;
     });
