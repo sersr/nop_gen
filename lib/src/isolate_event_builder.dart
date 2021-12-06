@@ -297,37 +297,19 @@ class IsolateEventGeneratorForAnnotation
       impl = _list.join(',');
       buffer.write(
           'mixin ${item.className}Resolve on Resolve implements $impl {\n');
-      buffer
-        ..write(
-            'late final _${_n}ResolveFuncList = List<Function>.unmodifiable(')
-        ..write(
-            '${List.generate(_funcs.length, (index) => '_${_funcs[index].name}_$index')}')
-        ..writeln(');')
-        ..writeln('''
+      buffer.writeln('''
             Iterable<MapEntry<String, Type>> getResolveProtocols() sync* {
               yield const MapEntry('$lowIsolateName',${item.messagerType}Message);
               yield* super.getResolveProtocols();
-          }
-        bool on${item.messagerType}Resolve(message) => false;
-        @override
-        bool resolve(resolveMessage) {
-          if (resolveMessage is IsolateSendMessage) {
-            final type = resolveMessage.type;
-            if (type is  ${item.messagerType}Message) {
-              dynamic result;
-              try {
-                if(on${item.messagerType}Resolve(resolveMessage)) return true;
-                result = _${_n}ResolveFuncList.elementAt(type.index)(resolveMessage.args);
-                receipt(result, resolveMessage);
-              } catch (e) {
-                receipt(result, resolveMessage, e);
-              }
-              return true; 
             }
-          }
-          return super.resolve(resolveMessage);
-        }''');
+            Iterable<MapEntry<Type,List<Function>>> resolveFunctionIterable()sync* {
+              yield MapEntry(${item.messagerType}Message, ${List.generate(_funcs.length, (index) => '_${_funcs[index].name}_$index')});
+              yield* super.resolveFunctionIterable();
+            }
+        ''');
 
+      // bool on${item.messagerType}Resolve(message) => false;
+      // if(on${item.messagerType}Resolve(resolveMessage)) return true;
       var count = 0;
 
       for (var f in _funcs) {
@@ -342,11 +324,14 @@ class IsolateEventGeneratorForAnnotation
                 : ''
             : parasOp;
 
-        final name = f.getReturnNameTransferType(reader);
+        // final name = f.getReturnNameTransferType(reader);
+        const name = '';
         final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
         if (f.useTransferType) {
+          // final returnName = '${f.returnType} ';
+          const returnName = '';
           buffer.writeln(
-              '${f.returnType} ${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("不要手动调用");');
+              '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("不要手动调用");');
         }
         buffer.write(
             '$name _${f.name}_$count(args) => $tranName($paras$parasMes);\n');
