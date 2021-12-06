@@ -445,7 +445,8 @@ class IsolateEventGeneratorForAnnotation
     clear();
 
     final allSupers = _supers.join(',');
-    final supersResolve = _supers.map((e) => '${e}Resolve').join(',');
+    var supersResolve = _supers.map((e) => '${e}Resolve').join(',');
+    supersResolve = supersResolve.isNotEmpty ? ',$supersResolve' : '';
     // ignore: unused_local_variable
     final impl = allSupers.isNotEmpty ? ',$allSupers' : '';
 
@@ -502,14 +503,14 @@ class IsolateEventGeneratorForAnnotation
         SendEvent,
         ListenMixin,
         Resolve,
-        ResolveMultiRecievedMixin,
+        ResolveMultiRecievedMixin 
         $supersResolve {}
         ''');
     } else if (group.connects.isNotEmpty) {
       buffer.write('''
       abstract class Multi${upperIsolateName}ResolveMain  with
         ListenMixin,
-        Resolve,
+        Resolve 
         $supersResolve
          {}''');
     }
