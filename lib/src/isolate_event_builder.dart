@@ -245,18 +245,11 @@ class IsolateEventGeneratorForAnnotation
     final _funcs = <Methods>[];
     _funcs.addAll(item.methods);
     final _supers = <String>[];
-    final _dynamicItems = <ClassItem>{};
-    if (item.methods.where((element) => element.useDynamic).isNotEmpty) {
-      _dynamicItems.add(item);
-    }
 
     if (item.separate || root) {
       buffer.writeAll(item.supers.map((e) => writeItems(e)));
     } else {
       _funcs.addAll(item.supers.expand((e) {
-        if (e.methods.where((element) => element.useDynamic).isNotEmpty) {
-          _dynamicItems.add(e);
-        }
         return getMethods(e);
       }));
       _supers.addAll(getSupers(item).whereType<String>());
@@ -266,28 +259,14 @@ class IsolateEventGeneratorForAnnotation
     }
 
     final _implements = <String>[];
+    var dynamicFunction = StringBuffer();
 
-    /// --------------- Mixin Dynamic ----------------------------
-    for (var element in _dynamicItems) {
-      if (element.methods.isNotEmpty) {
-        final name = '${element.className}Dynamic';
-        _implements.add(name);
-        buffer.write('/// implements [${element.className}]\n');
-        buffer.write('mixin $name {\n');
-        element.methods.where((element) => element.useDynamic).forEach((e) {
-          final name = e.getReturnNameTransferType(reader);
-          buffer.write('$name ${e.name}Dynamic(${e.parameters.join(',')});');
-        });
-        buffer.write('}');
-      }
-    }
     final lowIsolateName = lowName(item.isolateName);
 
     /// ------------ Resolve -------------------------------------
     if (_funcs.isNotEmpty) {
       final _list = <String>[];
 
-      final _n = lowName(item.className!);
       final su = _supers.isEmpty ? '${item.className}' : _supers.join(',');
       var impl = '';
       _list.add(su);
@@ -295,6 +274,35 @@ class IsolateEventGeneratorForAnnotation
         _list.add(_implements.join(','));
       }
       impl = _list.join(',');
+
+      final closureBuffer = <String>[];
+      for (var f in _funcs) {
+        var parasOp = f.parametersNamedUsed.join(',');
+        var paras = f.parameters.length == 1 && parasOp.isEmpty
+            ? 'args'
+            : List.generate(f.parameters.length - f.parametersNamedUsed.length,
+                (index) => 'args[$index]').join(',');
+        if (paras.isNotEmpty && parasOp.isNotEmpty) {
+          parasOp = ',$parasOp';
+        }
+        final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
+        if (f.useTransferType) {
+          const returnName = '';
+          dynamicFunction.write(
+              '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("不要手动调用");');
+        }
+        if (f.useDynamic) {
+          final name = f.getReturnNameTransferType(reader);
+          dynamicFunction
+              .write('$name ${f.name}Dynamic(${f.parameters.join(',')});');
+        }
+        final para = '$paras$parasOp';
+        if (para == 'args') {
+          closureBuffer.add('$tranName');
+        } else {
+          closureBuffer.add('(args) => $tranName($para)');
+        }
+      }
       buffer.write(
           'mixin ${item.className}Resolve on Resolve implements $impl {\n');
       buffer.writeln('''
@@ -303,40 +311,12 @@ class IsolateEventGeneratorForAnnotation
               yield* super.getResolveProtocols();
             }
             Iterable<MapEntry<Type,List<Function>>> resolveFunctionIterable()sync* {
-              yield MapEntry(${item.messagerType}Message, ${List.generate(_funcs.length, (index) => '_${_funcs[index].name}_$index')});
+              yield MapEntry(${item.messagerType}Message, $closureBuffer);
               yield* super.resolveFunctionIterable();
             }
         ''');
 
-      // bool on${item.messagerType}Resolve(message) => false;
-      // if(on${item.messagerType}Resolve(resolveMessage)) return true;
-      var count = 0;
-
-      for (var f in _funcs) {
-        final paras = f.parameters.length == 1 && !f.hasNamed
-            ? 'args'
-            : List.generate(f.parameters.length - f.parametersNamedUsed.length,
-                (index) => 'args[$index]').join(',');
-        final parasOp = f.parametersNamedUsed.join(',');
-        final parasMes = paras.isNotEmpty
-            ? parasOp.isNotEmpty
-                ? ',$parasOp'
-                : ''
-            : parasOp;
-
-        // final name = f.getReturnNameTransferType(reader);
-        const name = '';
-        final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
-        if (f.useTransferType) {
-          // final returnName = '${f.returnType} ';
-          const returnName = '';
-          buffer.writeln(
-              '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("不要手动调用");');
-        }
-        buffer.write(
-            '$name _${f.name}_$count(args) => $tranName($paras$parasMes);\n');
-        count++;
-      }
+      buffer.write(dynamicFunction);
       buffer.writeln('\n}\n');
       var sendEvent = 'sendEvent';
 
