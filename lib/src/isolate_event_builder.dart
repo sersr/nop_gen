@@ -66,36 +66,38 @@ class Methods {
   bool get useDynamic => isDynamic || (useTransferType && !useSameReturnType);
   bool useSameReturnType = false;
   String? _getReturnNameTransferType;
+  String replace(String prefex, String source, LibraryReader reader) {
+    var name = '';
+    source.replaceAllMapped(RegExp('^$prefex<(.*)>\$'), (match) {
+      final item = match[1];
+      final itemNotNull = '$item'.replaceAll('?', '');
+      final currentItem = 'TransferType<$itemNotNull>';
+      final itemElement = reader.findType(itemNotNull);
+
+      if (itemElement is ClassElement) {
+        useSameReturnType = itemElement.allSupertypes.any((element) => element
+            .getDisplayString(withNullability: false)
+            .contains(currentItem));
+      }
+      name = useSameReturnType
+          ? returnType.toString()
+          : '$prefex<TransferType<$item>>';
+      return '';
+    });
+    return name;
+  }
 
   String getReturnNameTransferType(LibraryReader reader) {
     if (_getReturnNameTransferType != null) return _getReturnNameTransferType!;
     var returnTypeName = '';
     final returnName = returnType.toString();
-    void replace(String prefex) {
-      returnName.replaceAllMapped(RegExp('^$prefex<(.*)>\$'), (match) {
-        final item = match[1];
-        final itemNotNull = '$item'.replaceAll('?', '');
-        final currentItem = 'TransferType<$itemNotNull>';
-        final itemElement = reader.findType(itemNotNull);
 
-        if (itemElement is ClassElement) {
-          useSameReturnType = itemElement.allSupertypes.any((element) => element
-              .getDisplayString(withNullability: false)
-              .contains(currentItem));
-        }
-        returnTypeName = useSameReturnType
-            ? returnType.toString()
-            : '$prefex<TransferType<$item>>';
-        return '';
-      });
-    }
-
-    replace('FutureOr');
+    returnTypeName = replace('FutureOr', returnName, reader);
     if (returnTypeName.isEmpty) {
-      replace('Future');
+      returnTypeName = replace('Future', returnName, reader);
     }
     if (returnTypeName.isEmpty) {
-      replace('Stream');
+      returnTypeName = replace('Stream', returnName, reader);
     }
 
     return _getReturnNameTransferType =
@@ -110,6 +112,10 @@ class Methods {
   String toString() {
     return '$runtimeType: $returnType $name(${parameters.join(',')})';
   }
+}
+
+bool useOption(String source, LibraryReader reader) {
+  return RegExp('<Option(.*)>\$').hasMatch(source);
 }
 
 class IsolateEventGeneratorForAnnotation
@@ -208,8 +214,9 @@ class IsolateEventGeneratorForAnnotation
         : rootResolveName;
     final mix = _resolve.isEmpty ? '' : ', $_resolve';
     var _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
-    _allItemsMessager =
-        _allItemsMessager.isNotEmpty ? 'SendEvent,$_allItemsMessager' : '';
+    _allItemsMessager = _allItemsMessager.isNotEmpty
+        ? 'SendEvent,SendMessage,$_allItemsMessager'
+        : '';
     buffer
       ..writeln('''
         abstract class ${_name}ResolveMain extends $className with ListenMixin, Resolve$mix {}''')
@@ -289,7 +296,7 @@ class IsolateEventGeneratorForAnnotation
         if (f.useTransferType) {
           const returnName = '';
           dynamicFunction.write(
-              '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("不要手动调用");');
+              '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("unused function");');
         }
         if (f.useDynamic) {
           final name = f.getReturnNameTransferType(reader);
@@ -318,13 +325,11 @@ class IsolateEventGeneratorForAnnotation
 
       buffer.write(dynamicFunction);
       buffer.writeln('\n}\n');
-      var sendEvent = 'sendEvent';
 
       /// --------------------- Messager -----------------------\
       buffer.write('''
         /// implements [${item.className}]
-        mixin ${item.className}Messager on SendEvent {
-          SendEvent get sendEvent;
+        mixin ${item.className}Messager on SendEvent,SendMessage {
           String get $lowIsolateName => '$lowIsolateName';
           Iterable<MapEntry<String,Type>> getProtocols() sync*{
             yield MapEntry($lowIsolateName,${item.messagerType}Message);
@@ -345,8 +350,13 @@ class IsolateEventGeneratorForAnnotation
                 : e.parametersMessageList;
         final eRetureType = e.returnType!;
         if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
-          buffer.write(
-              ' {return $sendEvent.sendMessage(${item.messagerType}Message.${e.name},$para,isolateName:$lowIsolateName);');
+          if (useOption(eRetureType.toString(), reader)) {
+            buffer.write(
+                ' {return sendOption(${item.messagerType}Message.${e.name},$para,isolateName:$lowIsolateName);');
+          } else {
+            buffer.write(
+                ' {return sendMessage(${item.messagerType}Message.${e.name},$para,isolateName:$lowIsolateName);');
+          }
         } else if (eRetureType.toString() == 'Stream' ||
             eRetureType.toString().startsWith('Stream<')) {
           final unique = e.unique;
@@ -363,7 +373,7 @@ class IsolateEventGeneratorForAnnotation
           list.add('isolateName: $lowIsolateName');
           named = ',${list.join(',')}';
           buffer.write(
-              '{return $sendEvent.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
+              '{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
         } else {
           buffer.write('{');
         }
@@ -457,9 +467,9 @@ class IsolateEventGeneratorForAnnotation
          yield MapEntry('$itemLow', createRemoteServer${upperName(item.isolateName)});''');
       }
 
-      final setDefaultOwnerGetter = isDefault
-          ? 'String get defaultSendPortOwnerName => \'$lowIsolateName\';'
-          : '';
+      // final setDefaultOwnerGetter = isDefault
+      //     ? 'String get defaultSendPortOwnerName => \'$lowIsolateName\';'
+      //     : '';
       var doConnectIsolate = doConnectIsolateBuffer.isNotEmpty
           ? '''
        void onResumeListen() {
@@ -470,7 +480,6 @@ class IsolateEventGeneratorForAnnotation
           : '';
       buffer.writeln('''
         mixin Multi${upperIsolateName}MessagerMixin on SendEvent,ListenMixin, SendMultiServerMixin /*impl*/ {
-          $setDefaultOwnerGetter
           Future<RemoteServer> createRemoteServer$upperIsolateName();
           $createRemoteServer
           Iterable<MapEntry<String,CreateRemoteServer>> createRemoteServerIterable() sync* {

@@ -207,7 +207,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     return '\$${e.name} ${e.typeDb}$primaryKey';
   });
 
-  const s = 'return \'CREATE TABLE \$table (';
+  const s = 'return \'CREATE TABLE IF NOT EXISTS \$table (';
   const length = 4 + s.length;
   final m = members.join(', ').split(' ');
 
