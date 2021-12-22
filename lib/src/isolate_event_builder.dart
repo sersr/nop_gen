@@ -447,7 +447,7 @@ class IsolateEventGeneratorForAnnotation
       final yiledAllServer = StringBuffer();
 
       yiledAllServer.write(
-          ''' yield MapEntry('$lowIsolateName',createRemoteServer$upperIsolateName);''');
+          ''' yield MapEntry('$lowIsolateName',Left(createRemoteServer$upperIsolateName));''');
 
       /// [Isolate]连接的实现
       for (var item in connectToOtherIsolates) {
@@ -464,7 +464,7 @@ class IsolateEventGeneratorForAnnotation
             ''');
 
         yiledAllServer.write('''
-         yield MapEntry('$itemLow', createRemoteServer${upperName(item.isolateName)});''');
+         yield MapEntry('$itemLow', Left(createRemoteServer${upperName(item.isolateName)}));''');
       }
 
       // final setDefaultOwnerGetter = isDefault
