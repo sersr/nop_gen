@@ -313,13 +313,14 @@ class IsolateEventGeneratorForAnnotation
       buffer.write(
           'mixin ${item.className}Resolve on Resolve implements $impl {\n');
       buffer.writeln('''
-            Iterable<MapEntry<String, Type>> getResolveProtocols() sync* {
-              yield const MapEntry('$lowIsolateName',${item.messagerType}Message);
-              yield* super.getResolveProtocols();
+            List<MapEntry<String, Type>> getResolveProtocols()  {
+              return super.getResolveProtocols()
+              ..add( const MapEntry('$lowIsolateName',${item.messagerType}Message));
             }
-            Iterable<MapEntry<Type,List<Function>>> resolveFunctionIterable()sync* {
-              yield MapEntry(${item.messagerType}Message, $closureBuffer);
-              yield* super.resolveFunctionIterable();
+            List<MapEntry<Type,List<Function>>> resolveFunctionIterable() {
+              return super.resolveFunctionIterable()
+              ..add(MapEntry(${item.messagerType}Message, $closureBuffer));
+             
             }
         ''');
 
@@ -331,9 +332,10 @@ class IsolateEventGeneratorForAnnotation
         /// implements [${item.className}]
         mixin ${item.className}Messager on SendEvent,SendMessage {
           String get $lowIsolateName => '$lowIsolateName';
-          Iterable<MapEntry<String,Type>> getProtocols() sync*{
-            yield MapEntry($lowIsolateName,${item.messagerType}Message);
-            yield* super.getProtocols();
+          List<MapEntry<String,Type>> getProtocols() {
+            return super.getProtocols()
+            ..add(MapEntry($lowIsolateName,${item.messagerType}Message));
+
           }
         ''');
       for (var e in _funcs) {
@@ -447,7 +449,7 @@ class IsolateEventGeneratorForAnnotation
       final yiledAllServer = StringBuffer();
 
       yiledAllServer.write(
-          ''' yield MapEntry('$lowIsolateName',Left(createRemoteServer$upperIsolateName));''');
+          '''..add(MapEntry('$lowIsolateName',Left(createRemoteServer$upperIsolateName)))''');
 
       /// [Isolate]连接的实现
       for (var item in connectToOtherIsolates) {
@@ -464,7 +466,7 @@ class IsolateEventGeneratorForAnnotation
             ''');
 
         yiledAllServer.write('''
-         yield MapEntry('$itemLow', Left(createRemoteServer${upperName(item.isolateName)}));''');
+         ..add(MapEntry('$itemLow', Left(createRemoteServer${upperName(item.isolateName)})))''');
       }
 
       // final setDefaultOwnerGetter = isDefault
@@ -482,9 +484,9 @@ class IsolateEventGeneratorForAnnotation
         mixin Multi${upperIsolateName}MessagerMixin on SendEvent,ListenMixin, SendMultiServerMixin /*impl*/ {
           Future<RemoteServer> createRemoteServer$upperIsolateName();
           $createRemoteServer
-          Iterable<MapEntry<String,CreateRemoteServer>> createRemoteServerIterable() sync* {
-            $yiledAllServer
-            yield* super.createRemoteServerIterable();
+          List<MapEntry<String,CreateRemoteServer>> createRemoteServerIterable() {
+             return super.createRemoteServerIterable()
+            $yiledAllServer;
           }
           $doConnectIsolate
         }
