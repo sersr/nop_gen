@@ -547,6 +547,7 @@ class IsolateEventGeneratorForAnnotation
             'Object') {
       return gen(element.supertype!.element);
     }
+    return null;
   }
 
   ClassItem? gen(ClassElement element, [ClassItem? parent]) {
