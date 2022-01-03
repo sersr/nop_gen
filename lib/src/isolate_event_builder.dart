@@ -215,7 +215,7 @@ class IsolateEventGeneratorForAnnotation
     final mix = _resolve.isEmpty ? '' : ', $_resolve';
     var _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
     _allItemsMessager = _allItemsMessager.isNotEmpty
-        ? 'SendEvent,SendMessage,$_allItemsMessager'
+        ? 'SendEvent,Messager,$_allItemsMessager'
         : '';
     buffer
       ..writeln('''
@@ -330,7 +330,7 @@ class IsolateEventGeneratorForAnnotation
       /// --------------------- Messager -----------------------\
       buffer.write('''
         /// implements [${item.className}]
-        mixin ${item.className}Messager on SendEvent,SendMessage {
+        mixin ${item.className}Messager on SendEvent,Messager {
           String get $lowIsolateName => '$lowIsolateName';
           List<MapEntry<String,Type>> getProtocols() {
             return super.getProtocols()
@@ -461,17 +461,14 @@ class IsolateEventGeneratorForAnnotation
         createRemoteServer.write(
             'Future<RemoteServer> createRemoteServer${upperName(item.isolateName)}();');
         doConnectIsolateBuffer.write(
-            '''sendPortOwners['$lowIsolateName']!.localSendPort.send(SendPortName(
-            '$itemLow', sendPortOwners['$itemLow']!.localSendPort,protocols: getServerProtocols('$itemLow')));
+            '''sendHandleOwners['$lowIsolateName']!.localSendHandle.send(SendHandleName(
+            '$itemLow', sendHandleOwners['$itemLow']!.localSendHandle,protocols: getServerProtocols('$itemLow')));
             ''');
 
         yiledAllServer.write('''
          ..add(MapEntry('$itemLow', Left(createRemoteServer${upperName(item.isolateName)})))''');
       }
 
-      // final setDefaultOwnerGetter = isDefault
-      //     ? 'String get defaultSendPortOwnerName => \'$lowIsolateName\';'
-      //     : '';
       var doConnectIsolate = doConnectIsolateBuffer.isNotEmpty
           ? '''
        void onResumeListen() {
