@@ -247,7 +247,7 @@ String genStatement(List<_ColumnInfo> columnInfos, String userTableName,
     String databaseTableName) {
   final buffer = StringBuffer();
   String lowTableName;
-  if (databaseTableName.contains('_Gen')) {
+  if (databaseTableName.contains('Gen')) {
     lowTableName =
         '${userTableName[0].toLowerCase()}${userTableName.substring(1)}';
   } else {

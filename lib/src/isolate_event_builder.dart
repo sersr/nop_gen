@@ -7,18 +7,18 @@ import 'package:nop_annotations/nop_annotations.dart';
 import 'package:source_gen/source_gen.dart';
 import 'package:analyzer/dart/element/element.dart';
 
-class IsolateGroup {
-  IsolateGroup(this.isolateName);
-  final String isolateName;
-  final connectToOthersGroup = <IsolateGroup>{};
+class ServerGroup {
+  ServerGroup(this.serverName);
+  final String serverName;
+  final connectToOthersGroup = <ServerGroup>{};
 
-  /// 要连接此`isolateName`Isolate
-  /// `connects`可能拥有相同的`isolate`
+  /// 要连接此`serverName`Server
+  /// `connects`可能拥有相同的`Server`
   final Set<ClassItem> connects = {};
 
-  /// 当前`isolateName`支持的协议
+  /// 当前`serverName`支持的协议
   final Set<ClassItem> currentItems = {};
-  void addConnectToGroup(IsolateGroup group) {
+  void addConnectToGroup(ServerGroup group) {
     connectToOthersGroup.add(group);
   }
 
@@ -39,8 +39,8 @@ class ClassItem {
   bool separate = false;
   String messagerType = '';
   final methods = <Methods>[];
-  String isolateName = '';
-  List<String> connectToIsolate = const [];
+  String serverName = '';
+  List<String> connectToServer = const [];
   List<ClassItem> privateProtocols = const [];
   bool isProtocols = false;
   @override
@@ -118,8 +118,8 @@ bool useOption(String source, LibraryReader reader) {
   return RegExp('<Option(.*)>\$').hasMatch(source);
 }
 
-class IsolateEventGeneratorForAnnotation
-    extends GeneratorForAnnotation<NopIsolateEvent> {
+class ServerEventGeneratorForAnnotation
+    extends GeneratorForAnnotation<NopServerEvent> {
   late LibraryReader reader;
   @override
   FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
@@ -150,7 +150,7 @@ class IsolateEventGeneratorForAnnotation
   }
 
   ClassItem? getNonDefaultName(ClassItem item) {
-    if (item.isolateName.isEmpty) {
+    if (item.serverName.isEmpty) {
       if (item.parent != null) {
         return getNonDefaultName(item.parent!);
       }
@@ -161,7 +161,7 @@ class IsolateEventGeneratorForAnnotation
 
   String write(ClassItem root) {
     /// root 必须是`default`
-    if (root.isolateName.isEmpty) root.isolateName = '${root.className}Default';
+    if (root.serverName.isEmpty) root.serverName = '${root.className}Default';
 
     final buffer = StringBuffer();
     buffer.writeln('// ignore_for_file: annotate_overrides\n'
@@ -170,29 +170,29 @@ class IsolateEventGeneratorForAnnotation
 
     final className = root.className;
 
-    final multiItems = <String, IsolateGroup>{};
+    final multiItems = <String, ServerGroup>{};
 
     void _add(ClassItem item) {
       final parentItem = getNonDefaultName(item);
       if (parentItem != null && item != parentItem) {
-        item.connectToIsolate = parentItem.connectToIsolate;
-        item.isolateName = parentItem.isolateName;
+        item.connectToServer = parentItem.connectToServer;
+        item.serverName = parentItem.serverName;
       }
       for (var element in item.privateProtocols) {
-        element.isolateName = item.isolateName;
-        element.connectToIsolate = item.connectToIsolate;
+        element.serverName = item.serverName;
+        element.connectToServer = item.connectToServer;
         element.isProtocols = true;
       }
 
       final group = multiItems.putIfAbsent(
-          item.isolateName, () => IsolateGroup(item.isolateName));
+          item.serverName, () => ServerGroup(item.serverName));
       group.addCurerntItem(item);
       item.privateProtocols.forEach(group.addCurerntItem);
-      final connectTo = item.connectToIsolate;
-      for (var connectToIsolateName in connectTo) {
-        if (connectToIsolateName == item.isolateName) continue;
+      final connectTo = item.connectToServer;
+      for (var connectToServerName in connectTo) {
+        if (connectToServerName == item.serverName) continue;
         final other = multiItems.putIfAbsent(
-            connectToIsolateName, () => IsolateGroup(connectToIsolateName));
+            connectToServerName, () => ServerGroup(connectToServerName));
         other.addConnect(item);
         group.addConnectToGroup(other);
       }
@@ -223,7 +223,7 @@ class IsolateEventGeneratorForAnnotation
       ..writeln(
           'abstract class ${_name}MessagerMain extends $className  ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}')
       ..write(writeItems(root, true))
-      ..writeAll(multiItems.values.map((e) => writeMultiIsolate(e)));
+      ..writeAll(multiItems.values.map((e) => writeMultiServer(e)));
 
     return buffer.toString();
   }
@@ -268,7 +268,7 @@ class IsolateEventGeneratorForAnnotation
     final _implements = <String>[];
     var dynamicFunction = StringBuffer();
 
-    final lowIsolateName = lowName(item.isolateName);
+    final lowServerName = lowName(item.serverName);
 
     /// ------------ Resolve -------------------------------------
     if (_funcs.isNotEmpty) {
@@ -315,7 +315,7 @@ class IsolateEventGeneratorForAnnotation
       buffer.writeln('''
             List<MapEntry<String, Type>> getResolveProtocols()  {
               return super.getResolveProtocols()
-              ..add( const MapEntry('$lowIsolateName',${item.messagerType}Message));
+              ..add( const MapEntry('$lowServerName',${item.messagerType}Message));
             }
             List<MapEntry<Type,List<Function>>> resolveFunctionIterable() {
               return super.resolveFunctionIterable()
@@ -331,10 +331,10 @@ class IsolateEventGeneratorForAnnotation
       buffer.write('''
         /// implements [${item.className}]
         mixin ${item.className}Messager on SendEvent,Messager {
-          String get $lowIsolateName => '$lowIsolateName';
+          String get $lowServerName => '$lowServerName';
           List<MapEntry<String,Type>> getProtocols() {
             return super.getProtocols()
-            ..add(MapEntry($lowIsolateName,${item.messagerType}Message));
+            ..add(MapEntry($lowServerName,${item.messagerType}Message));
 
           }
         ''');
@@ -354,10 +354,10 @@ class IsolateEventGeneratorForAnnotation
         if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
           if (useOption(eRetureType.toString(), reader)) {
             buffer.write(
-                ' {return sendOption(${item.messagerType}Message.${e.name},$para,isolateName:$lowIsolateName);');
+                ' {return sendOption(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);');
           } else {
             buffer.write(
-                ' {return sendMessage(${item.messagerType}Message.${e.name},$para,isolateName:$lowIsolateName);');
+                ' {return sendMessage(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);');
           }
         } else if (eRetureType.toString() == 'Stream' ||
             eRetureType.toString().startsWith('Stream<')) {
@@ -372,7 +372,7 @@ class IsolateEventGeneratorForAnnotation
           if (cached) {
             list.add('cached: true');
           }
-          list.add('isolateName: $lowIsolateName');
+          list.add('serverName: $lowServerName');
           named = ',${list.join(',')}';
           buffer.write(
               '{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
@@ -387,25 +387,25 @@ class IsolateEventGeneratorForAnnotation
     return buffer.toString();
   }
 
-  /// ------- multi Isolate generator ----------
-  /// 生成多个[Isolate]mixins
+  /// ------- multi Server generator ----------
+  /// 生成多个[Server]mixins
   /// 初始化时检测协议匹配
   /// 子隔离之间通信实现，连接时检测协议
-  String writeMultiIsolate(IsolateGroup group) {
+  String writeMultiServer(ServerGroup group) {
     List<ClassItem> items = group.currentItems.toList();
     if (items.isEmpty) {
       // ignore: avoid_print
       print('.------------error: ${items.length}');
       return '';
     }
-    var isolateName = group.isolateName;
-    final upperIsolateName = upperName(isolateName);
-    final lowIsolateName = lowName(isolateName);
-    final connectToOtherIsolates = group.connectToOthersGroup;
+    var serverName = group.serverName;
+    final upperServerName = upperName(serverName);
+    final lowServerName = lowName(serverName);
+    final connectToOtherServers = group.connectToOthersGroup;
 
     final buffer = StringBuffer();
 
-    var isDefault = group.isolateName.toLowerCase().contains('default');
+    var isDefault = group.serverName.toLowerCase().contains('default');
 
     final genSupers = <String>{};
     void clear() {
@@ -423,7 +423,7 @@ class IsolateEventGeneratorForAnnotation
         return;
       }
       for (var element in innerItem.supers) {
-        if (element.isolateName == isolateName) {
+        if (element.serverName == serverName) {
           getSupers(element);
         }
       }
@@ -443,51 +443,51 @@ class IsolateEventGeneratorForAnnotation
     final impl = allSupers.isNotEmpty ? ',$allSupers' : '';
 
     if (isDefault) {
-      final doConnectIsolateBuffer = StringBuffer();
+      final doConnectServerBuffer = StringBuffer();
 
       final createRemoteServer = StringBuffer();
       final yiledAllServer = StringBuffer();
 
       yiledAllServer.write(
-          '''..add(MapEntry('$lowIsolateName',Left(createRemoteServer$upperIsolateName)))''');
+          '''..add(MapEntry('$lowServerName',Left(createRemoteServer$upperServerName)))''');
 
-      /// [Isolate]连接的实现
-      for (var item in connectToOtherIsolates) {
-        final itemLow = lowName(item.isolateName);
+      /// [Server]连接的实现
+      for (var item in connectToOtherServers) {
+        final itemLow = lowName(item.serverName);
         for (var c in item.currentItems) {
           getSupers(c);
         }
         clear();
         createRemoteServer.write(
-            'Future<RemoteServer> createRemoteServer${upperName(item.isolateName)}();');
-        doConnectIsolateBuffer.write(
-            '''sendHandleOwners['$lowIsolateName']!.localSendHandle.send(SendHandleName(
+            'Future<RemoteServer> createRemoteServer${upperName(item.serverName)}();');
+        doConnectServerBuffer.write(
+            '''sendHandleOwners['$lowServerName']!.localSendHandle.send(SendHandleName(
             '$itemLow', sendHandleOwners['$itemLow']!.localSendHandle,protocols: getServerProtocols('$itemLow')));
             ''');
 
         yiledAllServer.write('''
-         ..add(MapEntry('$itemLow', Left(createRemoteServer${upperName(item.isolateName)})))''');
+         ..add(MapEntry('$itemLow', Left(createRemoteServer${upperName(item.serverName)})))''');
       }
 
-      var doConnectIsolate = doConnectIsolateBuffer.isNotEmpty
+      var doConnectServer = doConnectServerBuffer.isNotEmpty
           ? '''
        void onResumeListen() {
-            $doConnectIsolateBuffer
+            $doConnectServerBuffer
             super.onResumeListen();
           }
       '''
           : '';
       buffer.writeln('''
-        mixin Multi${upperIsolateName}MessagerMixin on SendEvent,ListenMixin, SendMultiServerMixin /*impl*/ {
-          Future<RemoteServer> createRemoteServer$upperIsolateName();
+        mixin Multi${upperServerName}MessagerMixin on SendEvent,ListenMixin, SendMultiServerMixin /*impl*/ {
+          Future<RemoteServer> createRemoteServer$upperServerName();
           $createRemoteServer
           List<MapEntry<String,CreateRemoteServer>> createRemoteServerIterable() {
              return super.createRemoteServerIterable()
             $yiledAllServer;
           }
-          $doConnectIsolate
+          $doConnectServer
         }
-        abstract class Multi${upperIsolateName}ResolveMain  with
+        abstract class Multi${upperServerName}ResolveMain  with
         SendEvent,
         ListenMixin,
         Resolve,
@@ -496,7 +496,7 @@ class IsolateEventGeneratorForAnnotation
         ''');
     } else if (group.connects.isNotEmpty) {
       buffer.write('''
-      abstract class Multi${upperIsolateName}ResolveMain  with
+      abstract class Multi${upperServerName}ResolveMain  with
         ListenMixin,
         Resolve 
         $supersResolve
@@ -555,13 +555,13 @@ class IsolateEventGeneratorForAnnotation
     element.metadata.any((_e) {
       final meta = _e.computeConstantValue();
       final type = meta?.type?.getDisplayString(withNullability: false);
-      if (type == 'NopIsolateEventItem') {
+      if (type == 'NopServerEventItem') {
         final messageName = meta?.getField('messageName')?.toStringValue();
         final separate = meta?.getField('separate')?.toBoolValue();
         generate = meta?.getField('generate')?.toBoolValue() ?? generate;
-        final isolateName = meta?.getField('isolateName')?.toStringValue();
-        final connectToIsolate =
-            meta?.getField('connectToIsolate')?.toListValue();
+        final serverName = meta?.getField('serverName')?.toStringValue();
+        final connectToServer =
+            meta?.getField('connectToServer')?.toListValue();
         final privateProtocols = meta
             ?.getField('privateProtocols')
             ?.toListValue()
@@ -570,13 +570,13 @@ class IsolateEventGeneratorForAnnotation
 
         if (messageName != null &&
             separate != null &&
-            isolateName != null &&
-            connectToIsolate != null) {
+            serverName != null &&
+            connectToServer != null) {
           if (!_item.separate) _item.separate = separate;
-          _item.isolateName = isolateName;
-          if ((parent == null || _item.isolateName.isNotEmpty) &&
-              connectToIsolate.isNotEmpty) {
-            _item.connectToIsolate = connectToIsolate
+          _item.serverName = serverName;
+          if ((parent == null || _item.serverName.isNotEmpty) &&
+              connectToServer.isNotEmpty) {
+            _item.connectToServer = connectToServer
                 .map((e) => e.toStringValue())
                 .whereType<String>()
                 .toList();
@@ -607,7 +607,7 @@ class IsolateEventGeneratorForAnnotation
           if (messageName.isNotEmpty) _item.messagerType = messageName;
           return true;
         }
-      } else if (type == 'NopIsolateEvent') {
+      } else if (type == 'NopServerEvent') {
         rootResolveName = meta?.getField('resolveName')?.toStringValue();
         _item.separate = true;
       }
@@ -677,7 +677,7 @@ class IsolateEventGeneratorForAnnotation
       methodElement.metadata.any((element) {
         final data = element.computeConstantValue();
         final type = data?.type?.getDisplayString(withNullability: false);
-        if (type == 'NopIsolateMethod') {
+        if (type == 'NopServerMethod') {
           final _isDynamic =
               data?.getField('isDynamic')?.toBoolValue() ?? false;
           final _useTransferType =
@@ -705,4 +705,4 @@ class IsolateEventGeneratorForAnnotation
 }
 
 Builder isolateEventBuilder(BuilderOptions options) => SharedPartBuilder(
-    [IsolateEventGeneratorForAnnotation()], 'nop_isolate_event');
+    [ServerEventGeneratorForAnnotation()], 'nop_isolate_event');
