@@ -1,6 +1,6 @@
 name: nop_db_gen
 description: nop_db code generation.
-version: 0.1.0
+version: 0.1.1
 homepage: none
 publish_to: none
 
@@ -10,9 +10,11 @@ environment:
 dependencies:
   source_gen: any
   nop_annotations:
-    path: ../nop_annotations
+    git:
+      url: git@github.com:sersr/nop_annotations.git
   nop_db:
-    path: ../nop_db
+    git:
+      url: git@github.com:sersr/nop_db.git
 dev_dependencies:
   flutter_test:
     sdk: flutter
