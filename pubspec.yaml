@@ -11,10 +11,10 @@ dependencies:
   source_gen: any
   nop_annotations:
     git:
-      url: git@github.com:sersr/nop_annotations.git
+      url: https://github.com/sersr/nop_annotations.git
   nop_db:
     git:
-      url: git@github.com:sersr/nop_db.git
+      url: https://github.com/sersr/nop_db.git
 dev_dependencies:
   flutter_test:
     sdk: flutter
