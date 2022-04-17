@@ -159,9 +159,13 @@ class ServerEventGeneratorForAnnotation
     return item;
   }
 
+  static String defaultName = 'default';
   String write(ClassItem root) {
     /// root 必须是`default`
-    if (root.serverName.isEmpty) root.serverName = '${root.className}Default';
+    if (root.serverName.isEmpty) {
+      root.serverName = '${lowName(root.className ?? '')}Default';
+    }
+    defaultName = root.serverName;
 
     final buffer = StringBuffer();
     buffer.writeln('// ignore_for_file: annotate_overrides\n'
@@ -206,20 +210,22 @@ class ServerEventGeneratorForAnnotation
     final _allItems = <String>[];
 
     _allItems.addAll(root.supers.expand((element) => getTypes(element)));
-    if (root.methods.isNotEmpty) _allItems.addAll(getTypes(root));
-    final _resolve = _allItems.map((e) => '${e}Resolve').join(',');
+    if (root.methods.isNotEmpty || !root.separate) {
+      _allItems.addAll(getTypes(root));
+    }
+    // final _resolve = _allItems.map((e) => '${e}Resolve').join(',');
 
-    final _name = rootResolveName == null || rootResolveName!.isEmpty
-        ? className
-        : rootResolveName;
-    final mix = _resolve.isEmpty ? '' : ', $_resolve';
+    final _name = root.serverName.isNotEmpty
+        ? upperName(root.serverName)
+        : root.className;
+    // final mix = _resolve.isEmpty ? '' : ', $_resolve';
     var _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
     _allItemsMessager = _allItemsMessager.isNotEmpty
         ? 'SendEvent,Messager,$_allItemsMessager'
         : '';
     buffer
-      ..writeln('''
-        abstract class ${_name}ResolveMain extends $className with ListenMixin, Resolve$mix {}''')
+      // ..writeln('''
+      //   abstract class ${_name}ResolveMain extends $className with ListenMixin, Resolve$mix {}''')
       ..writeln(
           'abstract class ${_name}MessagerMain extends $className  ${_allItemsMessager.isNotEmpty ? 'with' : ''} $_allItemsMessager{}')
       ..write(writeItems(root, true))
@@ -313,13 +319,13 @@ class ServerEventGeneratorForAnnotation
       buffer.write(
           'mixin ${item.className}Resolve on Resolve implements $impl {\n');
       buffer.writeln('''
-            List<MapEntry<String, Type>> getResolveProtocols()  {
+            Map<String, Type> getResolveProtocols()  {
               return super.getResolveProtocols()
-              ..add( const MapEntry('$lowServerName',${item.messagerType}Message));
+              ..['$lowServerName'] = ${item.messagerType}Message;
             }
-            List<MapEntry<Type,List<Function>>> resolveFunctionIterable() {
+            Map<Type,List<Function>> resolveFunctionIterable() {
               return super.resolveFunctionIterable()
-              ..add(MapEntry(${item.messagerType}Message, $closureBuffer));
+              ..[${item.messagerType}Message]= $closureBuffer;
              
             }
         ''');
@@ -332,9 +338,9 @@ class ServerEventGeneratorForAnnotation
         /// implements [${item.className}]
         mixin ${item.className}Messager on SendEvent,Messager {
           String get $lowServerName => '$lowServerName';
-          List<MapEntry<String,Type>> getProtocols() {
+          Map<String,Type> getProtocols() {
             return super.getProtocols()
-            ..add(MapEntry($lowServerName,${item.messagerType}Message));
+            ..[$lowServerName] = ${item.messagerType}Message;
 
           }
         ''');
@@ -405,7 +411,7 @@ class ServerEventGeneratorForAnnotation
 
     final buffer = StringBuffer();
 
-    var isDefault = group.serverName.toLowerCase().contains('default');
+    var isDefault = group.serverName == defaultName;
 
     final genSupers = <String>{};
     void clear() {
@@ -448,8 +454,8 @@ class ServerEventGeneratorForAnnotation
       final createRemoteServer = StringBuffer();
       final yiledAllServer = StringBuffer();
 
-      yiledAllServer.write(
-          '''..add(MapEntry('$lowServerName',Left(createRemoteServer$upperServerName)))''');
+      yiledAllServer
+          .write('''..['$lowServerName'] = ${lowServerName}RemoteServer''');
 
       /// [Server]连接的实现
       for (var item in connectToOtherServers) {
@@ -458,15 +464,15 @@ class ServerEventGeneratorForAnnotation
           getSupers(c);
         }
         clear();
-        createRemoteServer.write(
-            'Future<RemoteServer> createRemoteServer${upperName(item.serverName)}();');
+        createRemoteServer
+            .write('RemoteServer get ${lowName(item.serverName)}RemoteServer;');
         doConnectServerBuffer.write(
             '''sendHandleOwners['$lowServerName']!.localSendHandle.send(SendHandleName(
             '$itemLow', sendHandleOwners['$itemLow']!.localSendHandle,protocols: getServerProtocols('$itemLow')));
             ''');
 
         yiledAllServer.write('''
-         ..add(MapEntry('$itemLow', Left(createRemoteServer${upperName(item.serverName)})))''');
+         ..['$itemLow'] = ${lowName(item.serverName)}RemoteServer''');
       }
 
       var doConnectServer = doConnectServerBuffer.isNotEmpty
@@ -479,14 +485,15 @@ class ServerEventGeneratorForAnnotation
           : '';
       buffer.writeln('''
         mixin Multi${upperServerName}MessagerMixin on SendEvent,ListenMixin, SendMultiServerMixin /*impl*/ {
-          Future<RemoteServer> createRemoteServer$upperServerName();
+          RemoteServer get ${lowServerName}RemoteServer;
           $createRemoteServer
-          List<MapEntry<String,CreateRemoteServer>> createRemoteServerIterable() {
-             return super.createRemoteServerIterable()
+          Map<String,RemoteServer> regRemoteServer() {
+             return super.regRemoteServer()
             $yiledAllServer;
           }
           $doConnectServer
         }
+        /// $lowServerName Server
         abstract class Multi${upperServerName}ResolveMain  with
         SendEvent,
         ListenMixin,
@@ -496,22 +503,23 @@ class ServerEventGeneratorForAnnotation
         ''');
     } else if (group.connects.isNotEmpty) {
       buffer.write('''
+      /// $lowServerName Server
       abstract class Multi${upperServerName}ResolveMain  with
         ListenMixin,
         Resolve 
         $supersResolve
          {}''');
     }
+
     return buffer.toString();
   }
 
   List<String> getTypes(ClassItem item) {
     final _list = <String>[];
-    if (item.methods.isNotEmpty) {
-      _list.add(item.className!);
-    }
     if (item.separate) {
       _list.addAll(item.supers.expand((e) => getTypes(e)));
+    } else {
+      _list.add(item.className!);
     }
     // _list.addAll(item.privateProtocols.expand((e) => getTypes(e)));
 
@@ -608,7 +616,7 @@ class ServerEventGeneratorForAnnotation
           return true;
         }
       } else if (type == 'NopServerEvent') {
-        rootResolveName = meta?.getField('resolveName')?.toStringValue();
+        // rootResolveName = meta?.getField('resolveName')?.toStringValue();
         _item.separate = true;
       }
       return false;
@@ -701,7 +709,7 @@ class ServerEventGeneratorForAnnotation
     return _item;
   }
 
-  String? rootResolveName;
+  // String? rootResolveName;
 }
 
 Builder isolateEventBuilder(BuilderOptions options) => SharedPartBuilder(
