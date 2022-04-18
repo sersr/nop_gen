@@ -30,7 +30,7 @@ String firstToLower(String s) {
   return s.substring(0, 1).toLowerCase() + s.substring(1);
 }
 
-class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<Nop> {
+class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
   @override
   String generateForAnnotatedElement(
       Element element, ConstantReader annotation, BuildStep buildStep) {
