@@ -50,7 +50,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
         if (nopDbItem != null) {
           final nop = nopDbItem.type?.getDisplayString(withNullability: false);
 
-          if (nop == 'Nop') {
+          if (nop == 'NopDb') {
             final _typetables = nopDbItem.getField('tables')?.toListValue();
 
             if (_typetables != null && _typetables.isNotEmpty) {
