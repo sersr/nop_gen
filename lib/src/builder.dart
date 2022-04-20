@@ -46,12 +46,12 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
       buffer.write('abstract class _Gen$dbName extends \$Database {\n');
 
       for (final i in element.metadata) {
-        final nopItem = i.computeConstantValue();
-        if (nopItem != null) {
-          final nop = nopItem.type?.getDisplayString(withNullability: false);
+        final nopDbItem = i.computeConstantValue();
+        if (nopDbItem != null) {
+          final nop = nopDbItem.type?.getDisplayString(withNullability: false);
 
           if (nop == 'Nop') {
-            final _typetables = nopItem.getField('tables')?.toListValue();
+            final _typetables = nopDbItem.getField('tables')?.toListValue();
 
             if (_typetables != null && _typetables.isNotEmpty) {
               tables.addAll(_typetables.map((e) => e.toTypeValue()));
@@ -284,17 +284,17 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
     info.name = e.name;
 
     for (var i in e.metadata) {
-      final nopItemMeta = i.computeConstantValue();
+      final nopDbItemMeta = i.computeConstantValue();
 
-      if (nopItemMeta != null) {
+      if (nopDbItemMeta != null) {
         final _typeName =
-            nopItemMeta.type?.getDisplayString(withNullability: false);
-        if (_typeName == 'NopItem') {
-          final name = nopItemMeta.getField('name')?.toStringValue();
+            nopDbItemMeta.type?.getDisplayString(withNullability: false);
+        if (_typeName == 'NopDbItem') {
+          final name = nopDbItemMeta.getField('name')?.toStringValue();
 
           final addPrimaryKey =
-              nopItemMeta.getField('primaryKey')?.toBoolValue();
-          final type = nopItemMeta.getField('type')?.toTypeValue();
+              nopDbItemMeta.getField('primaryKey')?.toBoolValue();
+          final type = nopDbItemMeta.getField('type')?.toTypeValue();
           if (addPrimaryKey != null && name != null) {
             info._isPrimaryKey = addPrimaryKey;
             info.nameDb = name.isEmpty ? e.name : name;
@@ -312,7 +312,7 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
     info.type ??= _type;
     if (info.typeDb == null && !info.isJson) {
       // ignore: avoid_print
-      print('不支持的类型没有提供具体类型 如：`@NopItem(type: String)`');
+      print('不支持的类型没有提供具体类型 如：`@NopDbItem(type: String)`');
     }
     return info;
   }).toList();
