@@ -427,7 +427,7 @@ class ServerEventGeneratorForAnnotation
 
     buffer.writeln('''
         /// 主入口
-        abstract class Multi${upperServerName}MessagerMain  with $rootClassName, SendEvent,Messager, ListenMixin, SendMultiServerMixin $rootMessager {
+        abstract class Multi${upperServerName}MessagerMain  with $rootClassName, ListenMixin, SendEventMixin, SendMultiServerMixin $rootMessager {
           $create
           $protBuffer
           $connectToBuffer
@@ -463,7 +463,7 @@ class ServerEventGeneratorForAnnotation
       }
       final itemLow = getDartMemberName(item.serverName);
 
-      connectTo.write('''sendTo('$lowServerName','$itemLow');''');
+      connectTo.write('''connect('$lowServerName','$itemLow');''');
     }
     if (!allDone) {
       log.warning(
@@ -510,7 +510,7 @@ class ServerEventGeneratorForAnnotation
     if (group.connectToOthersGroup.isNotEmpty) {
       // 要连接其他 `server` 需要 mixin [ResolveMultiRecievedMixin]
       connectToOthers =
-          ',Messager,SendEvent,SendEventMixin,ResolveMultiRecievedMixin';
+          ',SendEventMixin,SendCacheMixin,ResolveMultiRecievedMixin';
       final buffer = StringBuffer();
       for (var item in group.connectToOthersGroup) {
         final _supers = getSuperNames(item);
