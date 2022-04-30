@@ -555,14 +555,14 @@ class ServerEventGeneratorForAnnotation
 
     final _funcs = <String>{};
     _funcs.addAll(item.methods.map((e) => e.name!));
-    _funcs.addAll(item.privateProtocols
-        .expand((element) => getMethods(element).map((e) => e.name!)));
     // buffer.writeAll(item.privateProtocols.map((e) => writeMessageEnum(e)));
     if (root || item.separate) {
       buffer.writeAll(item.supers.map((e) => writeMessageEnum(e)));
     } else {
       _funcs.addAll(item.supers.expand((e) => e.methods.map((e) => e.name!)));
     }
+    _funcs.addAll(item.privateProtocols
+        .expand((element) => getMethods(element).map((e) => e.name!)));
     if (_funcs.isNotEmpty) {
       buffer
         ..write('enum ${item.messagerType}Message {\n')
