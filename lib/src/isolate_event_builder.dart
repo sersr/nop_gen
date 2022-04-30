@@ -475,7 +475,7 @@ class ServerEventGeneratorForAnnotation
   Set<String> getSuperNames(ServerGroup group) {
     final genSupers = <String>{};
     void getSupers(ClassItem innerItem) {
-      if (innerItem.methods.isNotEmpty) {
+      if (innerItem.methods.isNotEmpty || innerItem.supers.isNotEmpty) {
         if (innerItem.parent?.separate == true) {
           genSupers.add(innerItem.className!);
         }
