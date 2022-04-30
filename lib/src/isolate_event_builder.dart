@@ -47,6 +47,7 @@ class ClassItem {
   List<String> connectToServer = const [];
   List<ClassItem> privateProtocols = const [];
   bool isProtocols = false;
+  bool isLocal = false;
   @override
   String toString() {
     return '$className';
@@ -199,15 +200,19 @@ class ServerEventGeneratorForAnnotation
     }
 
     _add(root);
-    final _allItems = <String>[];
+    final _allItems = <ClassItem>[];
 
     _allItems.addAll(root.supers.expand((element) => getTypes(element)));
     if (root.methods.isNotEmpty) {
       _allItems.addAll(getTypes(root));
     }
-
-    var _allItemsMessager = _allItems.map((e) => '${e}Messager').join(',');
-
+    var hasLocal = false;
+    var _allItemsMessager = _allItems.map((e) {
+      hasLocal |= e.isLocal;
+      return e.isLocal ? '${e.className}Resolve' : '${e.className}Messager';
+    }).join(',');
+    _allItemsMessager =
+        hasLocal ? 'Resolve,$_allItemsMessager' : _allItemsMessager;
     final rootMessager =
         '${_allItemsMessager.isNotEmpty ? ',' : ''} $_allItemsMessager';
     buffer
@@ -308,9 +313,9 @@ class ServerEventGeneratorForAnnotation
     buffer.write(
         'mixin ${item.className}Resolve on Resolve implements $impl {\n');
     buffer.writeln('''
-            Map<String, Type> getResolveProtocols()  {
+            Map<String, List<Type>> getResolveProtocols()  {
               return super.getResolveProtocols()
-              ..['$lowServerName'] = ${item.messagerType}Message;
+            ..putIfAbsent('$lowServerName',()=> []).add(${item.messagerType}Message);
             }
             Map<Type,List<Function>> resolveFunctionIterable() {
               return super.resolveFunctionIterable()
@@ -327,9 +332,9 @@ class ServerEventGeneratorForAnnotation
         /// implements [${item.className}]
         mixin ${item.className}Messager on SendEvent,Messager {
           String get $lowServerName => '$lowServerName';
-          Map<String,Type> getProtocols() {
+          Map<String,List<Type>> getProtocols() {
             return super.getProtocols()
-            ..[$lowServerName] = ${item.messagerType}Message;
+            ..putIfAbsent($lowServerName,()=> []).add(${item.messagerType}Message);
 
           }
         ''');
@@ -451,10 +456,17 @@ class ServerEventGeneratorForAnnotation
       return;
     }
     final lowServerName = getDartMemberName(group.serverName);
-    prot.write('''..['$lowServerName'] = ${lowServerName}RemoteServer''');
-    create.write('RemoteServer get ${lowServerName}RemoteServer;');
+    if (!group.currentItems.first.isLocal) {
+      prot.write('''..['$lowServerName'] = ${lowServerName}RemoteServer''');
+      create.write('RemoteServer get ${lowServerName}RemoteServer;');
+    }
 
     var allDone = true;
+    final hasLocal = group.connectToOthersGroup.any(
+        (element) => element.currentItems.any((element) => element.isLocal));
+    if (hasLocal) {
+      connectTo.write('final ${lowServerName}Prots = getResolveProtocols();\n');
+    }
     for (var item in group.connectToOthersGroup) {
       if (getGroup(item.serverName).currentItems.isEmpty) {
         log.warning('\x1B[31merror: 没有找到 ${item.serverName} 的 server\x1B[00m');
@@ -462,8 +474,10 @@ class ServerEventGeneratorForAnnotation
         continue;
       }
       final itemLow = getDartMemberName(item.serverName);
-
-      connectTo.write('''connect('$lowServerName','$itemLow');''');
+      final isLocal = item.currentItems.first.isLocal
+          ? ''',isLocal: true,localProt:${lowServerName}Prots['$itemLow']'''
+          : '';
+      connectTo.write('''connect('$lowServerName','$itemLow'$isLocal);''');
     }
     if (!allDone) {
       log.warning(
@@ -475,7 +489,7 @@ class ServerEventGeneratorForAnnotation
   Set<String> getSuperNames(ServerGroup group) {
     final genSupers = <String>{};
     void getSupers(ClassItem innerItem) {
-      if (innerItem.methods.isNotEmpty || innerItem.supers.isNotEmpty) {
+      if (innerItem.methods.isNotEmpty) {
         if (innerItem.parent?.separate == true) {
           genSupers.add(innerItem.className!);
         }
@@ -512,11 +526,14 @@ class ServerEventGeneratorForAnnotation
       connectToOthers =
           ',SendEventMixin,SendCacheMixin,ResolveMultiRecievedMixin';
       final buffer = StringBuffer();
+      final _allGroupSupers = <String>{};
       for (var item in group.connectToOthersGroup) {
         final _supers = getSuperNames(item);
-        var supersMessager = _supers.map((e) => '${e}Messager').join(',');
-        buffer.write(supersMessager);
+        _allGroupSupers.addAll(_supers);
       }
+      var supersMessager = _allGroupSupers.map((e) => '${e}Messager').join(',');
+
+      buffer.write(supersMessager);
       if (buffer.isNotEmpty) {
         connectToOthers = '$connectToOthers,$buffer';
       }
@@ -536,18 +553,18 @@ class ServerEventGeneratorForAnnotation
         ''');
   }
 
-  List<String> getTypes(ClassItem item) {
-    final _list = <String>[];
+  List<ClassItem> getTypes(ClassItem item) {
+    final _list = <ClassItem>{};
     if (item.supers.isNotEmpty && item.separate) {
       _list.addAll(item.supers.expand((e) => getTypes(e)));
     } else {
       if (item.methods.isNotEmpty || getMethods(item).isNotEmpty) {
-        _list.add(item.className!);
+        _list.add(item);
       }
     }
     // _list.addAll(item.privateProtocols.expand((e) => getTypes(e)));
 
-    return _list.toSet().toList();
+    return _list.toList();
   }
 
   String writeMessageEnum(ClassItem item, [bool root = false]) {
@@ -601,13 +618,16 @@ class ServerEventGeneratorForAnnotation
             ?.toListValue()
             ?.map((e) => e.toTypeValue()?.element)
             .whereType<Element>();
+        final isLocal = meta?.getField('isLocal')?.toBoolValue();
 
         if (messageName != null &&
             separate != null &&
             serverName != null &&
+            isLocal != null &&
             connectToServer != null) {
           if (!_item.separate) _item.separate = separate;
           _item.serverName = getDartMemberName(serverName);
+          _item.isLocal = isLocal;
           if ((parent == null || _item.serverName.isNotEmpty) &&
               connectToServer.isNotEmpty) {
             _item.connectToServer = connectToServer
