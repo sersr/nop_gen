@@ -45,7 +45,7 @@ class ClassItem {
   final methods = <Methods>[];
   String serverName = '';
   List<String> connectToServer = const [];
-  List<ClassItem> privateProtocols = const [];
+  // List<ClassItem> privateProtocols = const [];
   bool isProtocols = false;
   bool isLocal = false;
   @override
@@ -175,16 +175,19 @@ class ServerEventGeneratorForAnnotation
         item.connectToServer = parentItem.connectToServer;
         item.serverName = parentItem.serverName;
       }
-      for (var element in item.privateProtocols) {
-        element.serverName = item.serverName;
-        element.connectToServer = item.connectToServer;
-        element.isProtocols = true;
-      }
+      // for (var element in item.privateProtocols) {
+      //   element.serverName = item.serverName;
+      //   element.connectToServer = item.connectToServer;
+      //   element.isProtocols = true;
+      // }
 
       final group = multiItems.putIfAbsent(
           item.serverName, () => ServerGroup(item.serverName));
-      group.addCurerntItem(item);
-      item.privateProtocols.forEach(group.addCurerntItem);
+      if (!group.currentItems.any(
+          (e) => e != root && !e.separate && getAllSupers(e).contains(item))) {
+        group.addCurerntItem(item);
+      }
+      // item.privateProtocols.forEach(group.addCurerntItem);
       final connectTo = item.connectToServer;
       for (var connectToServerName in connectTo) {
         if (connectToServerName == item.serverName) continue;
@@ -223,22 +226,20 @@ class ServerEventGeneratorForAnnotation
     return buffer.toString();
   }
 
-  List<Methods> getMethods(ClassItem item, {bool isProtocols = false}) {
+  List<Methods> getMethods(ClassItem item) {
     final _methods = <Methods>[];
     _methods.addAll(item.methods);
-    if (!item.separate || isProtocols) {
-      _methods.addAll(
-          item.supers.expand((e) => getMethods(e, isProtocols: isProtocols)));
+    if (!item.separate) {
+      _methods.addAll(item.supers.expand((e) => getMethods(e)));
     }
     return _methods;
   }
 
-  List<String?> getSupers(ClassItem item, {bool isProtocols = false}) {
+  List<String?> getSupers(ClassItem item) {
     final _supers = <String?>[];
     _supers.add(item.className);
-    if (!item.separate || isProtocols) {
-      _supers.addAll(
-          item.supers.expand((e) => getSupers(e, isProtocols: isProtocols)));
+    if (!item.separate) {
+      _supers.addAll(item.supers.expand((e) => getSupers(e)));
     }
     return _supers;
   }
@@ -246,24 +247,15 @@ class ServerEventGeneratorForAnnotation
   /// 生成`Messager`、`Resolve`
   String writeItems(ClassItem item, [bool root = false]) {
     final buffer = StringBuffer();
-    final _funcs = <Methods>[];
-    _funcs.addAll(item.methods);
-    final _supers = <String>[];
+    final _funcs = <Methods>{};
+    final _supers = <String>{};
 
     if (item.separate || root) {
-      buffer.writeAll(item.supers.map((e) => writeItems(e)));
+      _funcs.addAll(item.methods);
+      buffer.writeAll(item.supers.map(writeItems));
     } else {
-      _funcs.addAll(item.supers.expand((e) {
-        return getMethods(e);
-      }));
+      _funcs.addAll(getMethods(item));
       _supers.addAll(getSupers(item).whereType<String>());
-    }
-    if (item.privateProtocols.isNotEmpty) {
-      // buffer.writeAll(item.privateProtocols.map((e) => writeItems(e)));
-      _funcs.addAll(item.privateProtocols
-          .expand((e) => getMethods(e, isProtocols: true)));
-      _supers.addAll(
-          item.privateProtocols.expand((e) => getSupers(e).whereType()));
     }
 
     var dynamicFunction = StringBuffer();
@@ -487,28 +479,39 @@ class ServerEventGeneratorForAnnotation
 
   // 获取所有父类的集合
   Set<String> getSuperNames(ServerGroup group) {
-    final genSupers = <String>{};
-    void getSupers(ClassItem innerItem) {
+    final genSupers = <ClassItem>{};
+    bool getSupers(ClassItem innerItem) {
+      if (!innerItem.separate) {
+        genSupers.add(innerItem);
+        return true;
+      }
+
       if (innerItem.methods.isNotEmpty) {
-        if (innerItem.parent?.separate == true) {
-          genSupers.add(innerItem.className!);
-        }
-      } else if (innerItem.privateProtocols.isNotEmpty) {
-        genSupers.add(innerItem.className!);
+        genSupers.add(innerItem);
+        return true;
       }
 
       for (var element in innerItem.supers) {
         if (element.serverName == group.serverName) {
-          getSupers(element);
+          if (getSupers(element)) return true;
         }
       }
+      return false;
     }
 
-    // 获取[method]非空的所有协议[enum],
     for (var item in group.currentItems) {
       getSupers(item);
     }
-    return genSupers;
+    final _s = <String>{};
+    for (var item in genSupers) {
+      final all =
+          genSupers.expand((e) => e == item ? const [] : getAllSupers(e));
+      if (all.every((e) => e.className != item.className)) {
+        _s.add(item.className!);
+      }
+    }
+
+    return genSupers.map((e) => e.className!).toSet();
   }
 
   void genServerResolve(ServerGroup group, StringBuffer resolveMain) {
@@ -553,6 +556,15 @@ class ServerEventGeneratorForAnnotation
         ''');
   }
 
+  List<ClassItem> getAllSupers(ClassItem item) {
+    final _list = <ClassItem>[];
+    if (item.supers.isNotEmpty) {
+      _list.addAll(item.supers);
+      _list.addAll(item.supers.expand((element) => getAllSupers(element)));
+    }
+    return _list;
+  }
+
   List<ClassItem> getTypes(ClassItem item) {
     final _list = <ClassItem>{};
     if (item.supers.isNotEmpty && item.separate) {
@@ -578,8 +590,8 @@ class ServerEventGeneratorForAnnotation
     } else {
       _funcs.addAll(item.supers.expand((e) => e.methods.map((e) => e.name!)));
     }
-    _funcs.addAll(item.privateProtocols
-        .expand((element) => getMethods(element).map((e) => e.name!)));
+    // _funcs.addAll(item.privateProtocols
+    //     .expand((element) => getMethods(element).map((e) => e.name!)));
     if (_funcs.isNotEmpty) {
       buffer
         ..write('enum ${item.messagerType}Message {\n')
@@ -613,11 +625,11 @@ class ServerEventGeneratorForAnnotation
         final serverName = meta?.getField('serverName')?.toStringValue();
         final connectToServer =
             meta?.getField('connectToServer')?.toListValue();
-        final privateProtocols = meta
-            ?.getField('privateProtocols')
-            ?.toListValue()
-            ?.map((e) => e.toTypeValue()?.element)
-            .whereType<Element>();
+        // final privateProtocols = meta
+        //     ?.getField('privateProtocols')
+        //     ?.toListValue()
+        //     ?.map((e) => e.toTypeValue()?.element)
+        //     .whereType<Element>();
         final isLocal = meta?.getField('isLocal')?.toBoolValue();
 
         if (messageName != null &&
@@ -636,28 +648,28 @@ class ServerEventGeneratorForAnnotation
                 .map((e) => getDartMemberName(e))
                 .toList();
           }
-          if (privateProtocols?.isNotEmpty == true) {
-            final privates = <ClassItem>{};
-            for (var item in privateProtocols!) {
-              if (item is ClassElement) {
-                final curent = gen(item, null);
-                // final privateinterfaces = item.interfaces
-                //     .map((e) => gen(e.element, null))
-                //     .whereType<ClassItem>();
+          // if (privateProtocols?.isNotEmpty == true) {
+          // final privates = <ClassItem>{};
+          // for (var item in privateProtocols!) {
+          //   if (item is ClassElement) {
+          //     final curent = gen(item, null);
+          // final privateinterfaces = item.interfaces
+          //     .map((e) => gen(e.element, null))
+          //     .whereType<ClassItem>();
 
-                // final privatemixins = item.mixins
-                //     .map((e) => gen(e.element, null))
-                //     .whereType<ClassItem>();
-                if (curent != null) {
-                  privates.add(curent);
-                }
-                // privates
-                //   ..addAll(privateinterfaces)
-                //   ..addAll(privatemixins);
-              }
-            }
-            _item.privateProtocols = privates.toList();
-          }
+          // final privatemixins = item.mixins
+          //     .map((e) => gen(e.element, null))
+          //     .whereType<ClassItem>();
+          // if (curent != null) {
+          // privates.add(curent);
+          // }
+          // privates
+          //   ..addAll(privateinterfaces)
+          //   ..addAll(privatemixins);
+          //   }
+          // }
+          // _item.privateProtocols = privates.toList();
+          // }
 
           if (messageName.isNotEmpty) _item.messagerType = messageName;
           return true;
