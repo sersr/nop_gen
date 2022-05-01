@@ -391,9 +391,11 @@ class ServerEventGeneratorForAnnotation
     final connectTo = StringBuffer();
     final prot = StringBuffer();
     final genResolve = StringBuffer();
+    final connectToLocal = StringBuffer();
 
     for (var group in groups) {
-      genConnectToServer(group, create, connectTo, prot, (serverName) {
+      genConnectToServer(group, create, connectTo, connectToLocal, prot,
+          (serverName) {
         return groups.firstWhere((element) => element.serverName == serverName);
       });
       genServerResolve(group, genResolve);
@@ -402,6 +404,7 @@ class ServerEventGeneratorForAnnotation
     if (connectTo.isNotEmpty) {
       connectToBuffer = '''
           void onResumeListen() {
+            $connectToLocal
             $connectTo
             super.onResumeListen();
           }
@@ -440,6 +443,7 @@ class ServerEventGeneratorForAnnotation
       ServerGroup group,
       StringBuffer create,
       StringBuffer connectTo,
+      StringBuffer connectToLocal,
       StringBuffer prot,
       ServerGroup Function(String serverName) getGroup) {
     if (group.currentItems.isEmpty) {
@@ -448,28 +452,29 @@ class ServerEventGeneratorForAnnotation
       return;
     }
     final lowServerName = getDartMemberName(group.serverName);
-    if (!group.currentItems.first.isLocal) {
+    final isLocal = group.currentItems.any((element) => element.isLocal);
+    if (!isLocal) {
       prot.write('''..['$lowServerName'] = ${lowServerName}RemoteServer''');
       create.write('RemoteServer get ${lowServerName}RemoteServer;');
     }
 
     var allDone = true;
-    final hasLocal = group.connectToOthersGroup.any(
-        (element) => element.currentItems.any((element) => element.isLocal));
-    if (hasLocal) {
-      connectTo.write('final ${lowServerName}Prots = getResolveProtocols();\n');
-    }
     for (var item in group.connectToOthersGroup) {
       if (getGroup(item.serverName).currentItems.isEmpty) {
         log.warning('\x1B[31merror: 没有找到 ${item.serverName} 的 server\x1B[00m');
         allDone = false;
         continue;
       }
+      final hasLocal = item.currentItems.any((element) => element.isLocal);
       final itemLow = getDartMemberName(item.serverName);
-      final isLocal = item.currentItems.first.isLocal
-          ? ''',isLocal: true,localProt:${lowServerName}Prots['$itemLow']'''
-          : '';
-      connectTo.write('''connect('$lowServerName','$itemLow'$isLocal);''');
+      var localProt = '';
+      if (hasLocal) {
+        localProt = ''',localProt: localProts['$itemLow']''';
+        if (connectToLocal.isEmpty) {
+          connectToLocal.write('final localProts = getResolveProtocols();\n');
+        }
+      }
+      connectTo.write('''connect('$lowServerName','$itemLow'$localProt);''');
     }
     if (!allDone) {
       log.warning(
@@ -501,14 +506,6 @@ class ServerEventGeneratorForAnnotation
 
     for (var item in group.currentItems) {
       getSupers(item);
-    }
-    final _s = <String>{};
-    for (var item in genSupers) {
-      final all =
-          genSupers.expand((e) => e == item ? const [] : getAllSupers(e));
-      if (all.every((e) => e.className != item.className)) {
-        _s.add(item.className!);
-      }
     }
 
     return genSupers.map((e) => e.className!).toSet();
