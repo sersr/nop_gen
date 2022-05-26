@@ -2,6 +2,7 @@ import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:nop_annotations/nop_annotations.dart';
+import 'package:nop_gen/src/type_name.dart';
 import 'package:source_gen/source_gen.dart';
 
 class _ColumnInfo {
@@ -50,7 +51,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
         if (nopDbItem != null) {
           final nop = nopDbItem.type?.getDisplayString(withNullability: false);
 
-          if (nop == 'NopDb') {
+          if (isSameType(nop)) {
             final _typetables = nopDbItem.getField('tables')?.toListValue();
 
             if (_typetables != null && _typetables.isNotEmpty) {
@@ -289,7 +290,7 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       if (nopDbItemMeta != null) {
         final _typeName =
             nopDbItemMeta.type?.getDisplayString(withNullability: false);
-        if (_typeName == 'NopDbItem') {
+        if (isSameType(_typeName)) {
           final name = nopDbItemMeta.getField('name')?.toStringValue();
 
           final addPrimaryKey =

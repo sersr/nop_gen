@@ -7,6 +7,9 @@ targets:
       nop_gen:nop_isolate_event:
         generate_for:
           - test/*
+      nop_gen:nop_route:
+        generate_for:
+          - test/*
 builders:
   nop_gen:
     import: "package:nop_gen/src/builder.dart"
@@ -19,6 +22,13 @@ builders:
     import: "package:nop_gen/src/isolate_event_builder.dart"
     builder_factories: ["isolateEventBuilder"]
     build_extensions: { ".dart": ["isolte_event_nop.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
+  nop_route:
+    import: "package:nop_gen/src/route_builder.dart"
+    builder_factories: ["routeMainBuilder"]
+    build_extensions: { ".dart": ["route_nop.g.part"] }
     auto_apply: dependents
     build_to: cache
     applies_builders: ["source_gen|combining_builder"]

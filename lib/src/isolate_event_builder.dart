@@ -4,7 +4,10 @@ import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:nop_annotations/nop_annotations.dart';
+import 'package:nop_gen/src/route_builder.dart';
 import 'package:source_gen/source_gen.dart';
+
+import 'type_name.dart';
 
 class ServerGroup {
   ServerGroup(this.serverName);
@@ -615,7 +618,7 @@ class ServerEventGeneratorForAnnotation
     element.metadata.any((_e) {
       final meta = _e.computeConstantValue();
       final type = meta?.type?.getDisplayString(withNullability: false);
-      if (type == 'NopServerEventItem') {
+      if (isSameType<NopServerEventItem>(type)) {
         final messageName = meta?.getField('messageName')?.toStringValue();
         final separate = meta?.getField('separate')?.toBoolValue();
         generate = meta?.getField('generate')?.toBoolValue() ?? generate;
@@ -671,7 +674,7 @@ class ServerEventGeneratorForAnnotation
           if (messageName.isNotEmpty) _item.messagerType = messageName;
           return true;
         }
-      } else if (type == 'NopServerEvent') {
+      } else if (isSameType<NopServerEvent>(type)) {
         // rootResolveName = meta?.getField('resolveName')?.toStringValue();
         _item.separate = true;
       }
