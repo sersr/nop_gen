@@ -9,6 +9,7 @@ environment:
 
 dependencies:
   source_gen: any
+  analyzer: any
   nop_annotations:
     git:
       url: https://github.com/sersr/nop_annotations.git
