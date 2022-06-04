@@ -51,7 +51,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
         if (nopDbItem != null) {
           final nop = nopDbItem.type?.getDisplayString(withNullability: false);
 
-          if (isSameType(nop)) {
+          if (isSameType<NopDb>(nop)) {
             final _typetables = nopDbItem.getField('tables')?.toListValue();
 
             if (_typetables != null && _typetables.isNotEmpty) {
@@ -290,7 +290,7 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       if (nopDbItemMeta != null) {
         final _typeName =
             nopDbItemMeta.type?.getDisplayString(withNullability: false);
-        if (isSameType(_typeName)) {
+        if (isSameType<NopDbItem>(_typeName)) {
           final name = nopDbItemMeta.getField('name')?.toStringValue();
 
           final addPrimaryKey =
