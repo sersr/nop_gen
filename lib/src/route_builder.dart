@@ -63,15 +63,31 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     var name = root.realClassName;
 
     final className = getDartClassName(name);
-
-    return '''
-    // ignore_for_file: prefer_const_constructors
-
+    final genBuffer = StringBuffer();
+    genBuffer.write('// ignore_for_file: prefer_const_constructors\n\n');
+    if (root.isSameClass) {
+      genBuffer.write('''
     class $className {
       $buffer
       $bufferNav
     }
-  ''';
+  ''');
+    } else {
+      final pathClassName = getDartClassName(root.realPathName);
+      genBuffer.write('''
+    class $className {
+      $className._();
+      $buffer
+    }
+  ''');
+      genBuffer.write('''
+    class $pathClassName {
+      $pathClassName._();
+      $bufferNav
+    }
+  ''');
+    }
+    return genBuffer.toString();
   }
 
   void genRoute(
@@ -81,9 +97,6 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     StringBuffer routeNav, {
     String currentPath = '',
   }) {
-    var children =
-        base.pages.map((e) => getDartMemberName(e.realName)).toList();
-
     final classPage = base.classElement;
     var mainClassName = classPage.name;
 
@@ -104,6 +117,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
     for (var constructor in classPage.constructors) {
       if (constructor.name.isEmpty) {
+        final isConst = constructor.isConst;
         final parameters = <String>[];
         final parametersMessage = <String>[];
         final parametersPosOrNamed = <String>[];
@@ -137,31 +151,73 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           buffer.write(',');
         }
         buffer.writeAll(parametersNamedUsed, ',');
-        final baseChild = '$mainClassName($buffer)';
+
+        var baseChild = '$mainClassName($buffer)';
+
         final methods = <MethodElement>{};
         for (var item in builders) {
           if (item.pages.contains(classPage)) {
             methods.add(item.method);
           }
         }
+        final preInitBuffer = StringBuffer();
+        final hasPreInit =
+            base.preInit.isNotEmpty || base.preInitUnique.isNotEmpty;
+        final pageConst = buffer.isEmpty && isConst && !hasPreInit;
+
+        if (hasPreInit) {
+          preInitBuffer.write('preRun: (preInit) {');
+        }
+        for (var item in base.preInitUnique) {
+          preInitBuffer.write('preInit<${item.name}>(shared: false);');
+        }
+        for (var item in base.preInit) {
+          preInitBuffer.write('preInit<${item.name}>();');
+        }
+        if (preInitBuffer.isNotEmpty) {
+          preInitBuffer.write('},');
+        }
+
+        var constPrefix = '';
+        if (pageConst) {
+          constPrefix = 'const';
+        }
+
         final builderBuffer = StringBuffer();
         if (methods.isNotEmpty) {
           final builds =
               methods.map((e) => '$targetClassName.${e.name}').toList();
-          builderBuffer.write('''builders: const $builds,
-        ''');
+          if (pageConst) {
+            builderBuffer.write('''builders: $builds,''');
+          } else {
+            builderBuffer.write('''builders: const $builds,''');
+          }
         }
+
+        var children = base.pages.map((e) {
+          var memberName = getDartMemberName(e.realName);
+          if (main.private) memberName = '_$memberName';
+
+          return memberName;
+        }).toList();
+
         var childrenBuffer = '';
         if (children.isNotEmpty) {
           childrenBuffer = 'children: $children,';
         }
+
+        var memberName = name;
+        if (!base.isRoot && main.private) {
+          memberName = '_$name';
+        }
         routes.write('''
-      static late final $name = NopRoute(
+      static final $memberName = NopRoute(
         name: '$routeName',
         fullName: '$fullName',
         $childrenBuffer
         builder: (context,arguments) =>
-        Nop(
+        $constPrefix Nop(
+        $preInitBuffer
         $builderBuffer
         child: $baseChild,
         ), 
@@ -171,11 +227,13 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
         final args = parametersNamedArgs.isEmpty
             ? 'const {}'
             : '{${parametersNamedArgs.join(',')}}';
+        final funcName = main.funcName(name);
+        final route = main.routeName(memberName);
         routeNav.write('''
-    static NopRouteActionEntry<T> ${name}Nav<T>(
+    static NopRouteAction<T> $funcName<T>(
         {BuildContext? context, ${parametersPosOrNamed.join(',')}}) {
-      return NopRouteActionEntry(
-          context: context, route: $name, arguments: $args);
+      return NopRouteAction(
+          context: context, route: $route, arguments: $args);
     }
     ''');
       }
@@ -185,42 +243,56 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     }
   }
 
-  NopMainElement gen(DartObject meta) {
-    final className = meta.getField('className')?.toStringValue();
-    final pages = meta.getField('pages')?.toListValue();
-    final privite = meta.getField('privite')?.toBoolValue();
-    final genKey = meta.getField('genKey')?.toBoolValue();
-    final main = meta.getField('main')?.toTypeValue();
-    final preInit = meta.getField('preInit')?.toListValue();
+  NopMainElement gen(DartObject value) {
+    final className = value.getField('className')?.toStringValue();
+    final rootName = value.getField('rootName')?.toStringValue();
+    final pages = value.getField('pages')?.toListValue();
+    final private = value.getField('private')?.toBoolValue();
+    final genKey = value.getField('genKey')?.toBoolValue();
+    final pathName = value.getField('pathName')?.toStringValue();
+    final main = value.getField('main')?.toTypeValue();
     final items = pages!.map(genItemElement).toList();
+    final preInit = value.getField('preInit')?.toListValue();
     final preInitElement =
-        preInit!.map((e) => e.toTypeValue()!.element!).toList();
+        preInit!.map((e) => e.toTypeValue()!.element!).toSet();
+    final preInitUnique = value.getField('preInitUnique')?.toListValue();
+    final preInitUniqueElement =
+        preInitUnique!.map((e) => e.toTypeValue()!.element!).toSet();
 
     return NopMainElement(
       className: className!,
+      name: rootName!,
       pages: items,
       main: main!.element!,
       preInit: preInitElement,
-      privite: privite!,
+      preInitUnique: preInitUniqueElement,
+      private: private!,
       genKey: genKey!,
+      pathName: pathName!,
     );
   }
 
-  RouteItemElement genItemElement(DartObject element) {
-    final metaName = element.type?.getDisplayString(withNullability: false);
+  RouteItemElement genItemElement(DartObject value) {
+    final metaName = value.type?.getDisplayString(withNullability: false);
     assert(isSameType<RouteItem>(metaName));
-    final name = element.getField('name')?.toStringValue();
-    final page = element.getField('page')?.toTypeValue();
-    final pages = element.getField('pages')?.toListValue();
-    final preInit = element.getField('preInit')?.toListValue();
+    final name = value.getField('name')?.toStringValue();
+    final page = value.getField('page')?.toTypeValue();
+    final pages = value.getField('pages')?.toListValue();
     final items = pages!.map(genItemElement).toList();
+    final preInit = value.getField('preInit')?.toListValue();
     final preInitElement =
-        preInit!.map((e) => e.toTypeValue()!.element!).toList();
+        preInit!.map((e) => e.toTypeValue()!.element!).toSet();
+    final preInitUnique = value.getField('preInitUnique')?.toListValue();
+    final preInitUniqueElement =
+        preInitUnique!.map((e) => e.toTypeValue()!.element!).toSet();
+
     return RouteItemElement(
-        page: page!.element!,
-        name: name!,
-        pages: items,
-        preInit: preInitElement);
+      page: page!.element!,
+      name: name!,
+      pages: items,
+      preInit: preInitElement,
+      preInitUnique: preInitUniqueElement,
+    );
   }
 
   RouteBuilderItemElement genBuildElement(
@@ -234,32 +306,58 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 class NopMainElement with Base {
   const NopMainElement({
     this.className = '',
+    this.name = 'root',
     this.pages = const [],
-    this.privite = true,
+    this.private = true,
     this.genKey = false,
+    this.pathName = '',
     required this.main,
-    this.preInit = const [],
+    this.preInit = const {},
+    this.preInitUnique = const {},
   });
   final String className;
-  String get realClassName => className.isEmpty ? 'Routes' : className;
   @override
-  String get name => 'root';
+  final String name;
 
   @override
   bool get isRoot => true;
+
   final bool genKey;
+  final String pathName;
+
+  bool get isSameClass => realPathName == realClassName;
+
+  String get realClassName => className.isEmpty ? 'Routes' : className;
+
+  String get realPathName => pathName.isEmpty ? 'NavRoutes' : pathName;
+
+  String funcName(String name) {
+    if (isSameClass) {
+      return 'nav${getDartClassName(name)}';
+    }
+    return name;
+  }
+
+  String routeName(String name) {
+    if (!isSameClass) {
+      return '$realClassName.$name';
+    }
+    return name;
+  }
 
   @override
   final List<RouteItemElement> pages;
 
   /// 除了root route其他都生成私有字段
-  final bool privite;
+  final bool private;
   final Element main;
   @override
   Element get page => main;
 
   @override
-  final List<Element> preInit;
+  final Set<Element> preInit;
+  @override
+  final Set<Element> preInitUnique;
 }
 
 class RouteItemElement with Base {
@@ -267,7 +365,8 @@ class RouteItemElement with Base {
     this.name = '',
     required this.page,
     this.pages = const [],
-    this.preInit = const [],
+    this.preInit = const {},
+    this.preInitUnique = const {},
   });
   @override
   final String name;
@@ -280,7 +379,9 @@ class RouteItemElement with Base {
   final List<RouteItemElement> pages;
 
   @override
-  final List<Element> preInit;
+  final Set<Element> preInit;
+  @override
+  final Set<Element> preInitUnique;
 }
 
 mixin Base {
@@ -298,7 +399,8 @@ mixin Base {
 
   List<RouteItemElement> get pages;
 
-  List<Element> get preInit;
+  Set<Element> get preInit;
+  Set<Element> get preInitUnique;
 }
 
 class RouteBuilderItemElement {
