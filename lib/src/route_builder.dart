@@ -161,22 +161,31 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           }
         }
         final preInitBuffer = StringBuffer();
-        final hasPreInit =
-            base.preInit.isNotEmpty || base.preInitUnique.isNotEmpty;
-        final pageConst = buffer.isEmpty && isConst && !hasPreInit;
 
-        if (hasPreInit) {
-          preInitBuffer.write('preRun: (preInit) {');
+        final pageConst = buffer.isEmpty && isConst;
+        var constPre = pageConst ? '' : 'const ';
+        if (base.preInit.isNotEmpty) {
+          preInitBuffer.write('''
+            initTypes: $constPre ${base.preInitList},
+          ''');
         }
-        for (var item in base.preInitUnique) {
-          preInitBuffer.write('preInit<${item.name}>(shared: false);');
+        if (base.preInitUnique.isNotEmpty) {
+          preInitBuffer.write('''
+            initTypesUnique: $constPre ${base.preInitUniqueList},
+          ''');
         }
-        for (var item in base.preInit) {
-          preInitBuffer.write('preInit<${item.name}>();');
-        }
-        if (preInitBuffer.isNotEmpty) {
-          preInitBuffer.write('},');
-        }
+        // if (hasPreInit) {
+        //   preInitBuffer.write('preRun: (preInit) {');
+        // }
+        // for (var item in base.preInitUnique) {
+        //   preInitBuffer.write('preInit<${item.name}>(shared: false);');
+        // }
+        // for (var item in base.preInit) {
+        //   preInitBuffer.write('preInit<${item.name}>();');
+        // }
+        // if (preInitBuffer.isNotEmpty) {
+        //   preInitBuffer.write('},');
+        // }
 
         var constPrefix = '';
         if (pageConst) {
@@ -400,6 +409,11 @@ mixin Base {
   List<RouteItemElement> get pages;
 
   Set<Element> get preInit;
+
+  List<String> get preInitList => preInit.map((e) => e.name!).toList();
+  List<String> get preInitUniqueList =>
+      preInitUnique.map((e) => e.name!).toList();
+
   Set<Element> get preInitUnique;
 }
 
