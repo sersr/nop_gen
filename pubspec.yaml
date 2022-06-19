@@ -1,23 +1,16 @@
 name: nop_gen
-description: nop_db code generation.
+description: nop 代码生成
 version: 0.1.3
-homepage: none
-publish_to: none
+repository: https://github.com/sersr/nop_gen
 
 environment:
   sdk: ">=2.12.0 <3.0.0"
 
 dependencies:
-  source_gen: any
-  analyzer: any
-  build: any
-  nop_annotations:
-    git:
-      url: https://github.com/sersr/nop_annotations.git
-
-dependency_overrides:
-  nop_annotations:
-    path: ../nop_annotations
+  source_gen: ^1.2.2
+  analyzer: ^4.1.0
+  build: ^2.3.0
+  nop_annotations: ^0.1.1
 
 dev_dependencies:
   flutter_test:
