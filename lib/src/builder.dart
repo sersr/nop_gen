@@ -66,7 +66,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
       final _tablesList = <String>[];
 
       for (var element in tables) {
-        final e = element?.element;
+        final e = element?.element2;
 
         if (e is ClassElement) {
           var _userTable = e.name;
@@ -99,8 +99,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
       final lrealTables = realDbTablesName.map((e) => firstToLower(e));
       // member: _tables
       buffer
-        ..write(
-            'late final _tables = <DatabaseTable>[${lrealTables.join(',')}];\n')
+        ..write('late final _tables = <DatabaseTable>[${lrealTables.join(',')}];\n')
         ..write(writeOver)
         ..write('List<DatabaseTable> get tables => _tables;\n\n');
 
@@ -124,8 +123,8 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
     return buffer.toString();
   }
 
-  String createTable(String userTableName, String databaseTableName,
-      List<_ColumnInfo> columnInfos) {
+  String createTable(
+      String userTableName, String databaseTableName, List<_ColumnInfo> columnInfos) {
     final buffer = StringBuffer();
 
     buffer.write(genTable(columnInfos, userTableName));
@@ -170,8 +169,7 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
   return buffer.toString();
 }
 
-String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
-    String databaseTableName) {
+String genTableDb(List<_ColumnInfo> columnInfos, String userTableName, String databaseTableName) {
   ///----------- DatabaseTable
   final buffer = StringBuffer();
 
@@ -183,15 +181,14 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     ..write(writeOver)
     ..write('final table = \'$userTableName\';\n');
 
-  final c =
-      columnInfos.map((e) => 'final ${e.name} = \'${e.nameDb}\';\n').join();
+  final c = columnInfos.map((e) => 'final ${e.name} = \'${e.nameDb}\';\n').join();
   // members
   buffer.write(c);
   // function: createTable
   buffer.write('\n');
   final _tableName = firstToLower(userTableName);
-  final _u = columnInfos.map((e) =>
-      'if($_tableName.${e.name} != null) update.${e.name}.set($_tableName.${e.name});\n');
+  final _u = columnInfos.map(
+      (e) => 'if($_tableName.${e.name} != null) update.${e.name}.set($_tableName.${e.name});\n');
   // update
   buffer
     ..write('void update$userTableName(UpdateStatement<$userTableName,')
@@ -233,8 +230,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
     ..write('static $userTableName mapToTable(Map<String,dynamic> map) =>\n')
     ..write(' $userTableName($_parMap);\n')
     ..write(writeOver)
-    ..write(
-        'List<$userTableName> toTable(Iterable<Map<String,Object?>> query) => ')
+    ..write('List<$userTableName> toTable(Iterable<Map<String,Object?>> query) => ')
     ..write('query.map((e)=> mapToTable(e)).toList();')
     // ..write(writeOver)
     // ..write('Map<String,dynamic> toJson($userTableName table) => ')
@@ -244,35 +240,29 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName,
 }
 
 final statements = ['QueryStatement', 'UpdateStatement', 'InsertStatement'];
-String genStatement(List<_ColumnInfo> columnInfos, String userTableName,
-    String databaseTableName) {
+String genStatement(List<_ColumnInfo> columnInfos, String userTableName, String databaseTableName) {
   final buffer = StringBuffer();
   String lowTableName;
   if (databaseTableName.contains('Gen')) {
-    lowTableName =
-        '${userTableName[0].toLowerCase()}${userTableName.substring(1)}';
+    lowTableName = '${userTableName[0].toLowerCase()}${userTableName.substring(1)}';
   } else {
-    lowTableName =
-        '${databaseTableName[0].toLowerCase()}${databaseTableName.substring(1)}';
+    lowTableName = '${databaseTableName[0].toLowerCase()}${databaseTableName.substring(1)}';
   }
   buffer.write(
       'extension ItemExtension$userTableName<T extends ItemExtension<$databaseTableName>> on T {\n');
 
-  final _items = columnInfos
-      .map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');
-  final _tableItems = columnInfos
-      .map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
+  final _items = columnInfos.map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');
+  final _tableItems = columnInfos.map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
   buffer
     ..writeAll(_items, '\n')
     ..write('\n\n')
     ..writeAll(_tableItems, '\n')
     ..write('}\n\n');
 
-  final _joinTableItems = columnInfos.map((e) =>
-      'J get ${lowTableName}_${e.name} => joinItem(joinTable.${e.name}) as J; \n');
+  final _joinTableItems = columnInfos
+      .map((e) => 'J get ${lowTableName}_${e.name} => joinItem(joinTable.${e.name}) as J; \n');
   buffer
-    ..write(
-        'extension JoinItem$userTableName<J extends JoinItem<$databaseTableName>> on J{\n')
+    ..write('extension JoinItem$userTableName<J extends JoinItem<$databaseTableName>> on J{\n')
     ..writeAll(_joinTableItems, '\n')
     ..write('}\n\n');
 
@@ -288,13 +278,11 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       final nopDbItemMeta = i.computeConstantValue();
 
       if (nopDbItemMeta != null) {
-        final _typeName =
-            nopDbItemMeta.type?.getDisplayString(withNullability: false);
+        final _typeName = nopDbItemMeta.type?.getDisplayString(withNullability: false);
         if (isSameType<NopDbItem>(_typeName)) {
           final name = nopDbItemMeta.getField('name')?.toStringValue();
 
-          final addPrimaryKey =
-              nopDbItemMeta.getField('primaryKey')?.toBoolValue();
+          final addPrimaryKey = nopDbItemMeta.getField('primaryKey')?.toBoolValue();
           final type = nopDbItemMeta.getField('type')?.toTypeValue();
           if (addPrimaryKey != null && name != null) {
             info._isPrimaryKey = addPrimaryKey;

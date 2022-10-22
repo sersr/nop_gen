@@ -280,15 +280,15 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final main = value.getField('main')?.toTypeValue();
     final items = pages!.map(genItemElement).toList();
     final list = value.getField('list')?.toListValue();
-    final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
+    final listElement = list!.map((e) => e.toTypeValue()!.element2!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
-    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
+    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element2!).toSet();
 
     final element = NopMainElement(
       className: className!,
       name: rootName!,
       pages: items,
-      main: main!.element!,
+      main: main!.element2!,
       list: listElement,
       groupList: groupListElement,
       private: private!,
@@ -309,12 +309,12 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final pages = value.getField('pages')?.toListValue();
     final items = pages!.map(genItemElement).toList();
     final list = value.getField('list')?.toListValue();
-    final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
+    final listElement = list!.map((e) => e.toTypeValue()!.element2!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
-    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
+    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element2!).toSet();
 
     final element = RouteItemElement(
-      page: page!.element!,
+      page: page!.element2!,
       name: name!,
       pages: items,
       list: listElement,
@@ -328,7 +328,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
   RouteBuilderItemElement genBuildElement(DartObject meta, MethodElement method) {
     final pages = meta.getField('pages')?.toListValue();
-    final pagesElement = pages!.map((e) => e.toTypeValue()!.element!).toList();
+    final pagesElement = pages!.map((e) => e.toTypeValue()!.element2!).toList();
     return RouteBuilderItemElement(pages: pagesElement, method: method);
   }
 }
