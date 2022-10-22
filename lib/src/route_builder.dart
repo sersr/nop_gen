@@ -18,8 +18,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
   }
 
   @override
-  generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) {
+  generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) {
     if (element is ClassElement) {
       for (var metaElement in element.metadata) {
         final meta = metaElement.computeConstantValue();
@@ -31,8 +30,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           for (var item in staticMethds) {
             for (var metaElement in item.metadata) {
               final meta = metaElement.computeConstantValue();
-              final metaName =
-                  meta?.type?.getDisplayString(withNullability: false);
+              final metaName = meta?.type?.getDisplayString(withNullability: false);
               if (isSameType<RouteBuilderItem>(metaName)) {
                 final part = genBuildElement(meta!, item);
                 final value = map[item];
@@ -55,8 +53,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
   late String targetClassName;
   late NopMainElement mainElement;
 
-  String generator(
-      NopMainElement root, List<RouteBuilderItemElement> builders) {
+  String generator(NopMainElement root, List<RouteBuilderItemElement> builders) {
     final buffer = StringBuffer();
     final bufferNav = StringBuffer();
     genRoute(root, builders, buffer, bufferNav);
@@ -129,16 +126,14 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           }
           parametersMessage.add(item.name);
           final requiredValue = item.isRequiredNamed ? 'required ' : '';
-          final defaultValue =
-              item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
+          final defaultValue = item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
           final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
 
           if (item.isOptionalPositional) {
             parametersPosOrNamed.add(fot);
             continue;
           } else if (item.isNamed) {
-            parametersNamedUsed
-                .add('${item.name}: arguments[\'${item.name}\']');
+            parametersNamedUsed.add('${item.name}: arguments[\'${item.name}\']');
             parametersNamedArgs.add("'${item.name}': ${item.name}");
             parametersPosOrNamed.add(fot);
             continue;
@@ -160,33 +155,32 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
             methods.add(item.method);
           }
         }
-        final preInitBuffer = StringBuffer();
+        final listBuffer = StringBuffer();
 
-        final pageConst =
-            buffer.isEmpty && isConst && base.allPreInitUnique.isEmpty;
+        final pageConst = buffer.isEmpty && isConst && base.allgroupList.isEmpty;
         var constPre = pageConst ? '' : 'const ';
 
-        if (base.preInit.isNotEmpty) {
-          preInitBuffer.write('''
-            initTypes: $constPre ${base.preInitList},
+        if (base.list.isNotEmpty) {
+          listBuffer.write('''
+            list: $constPre ${base.listList},
           ''');
         }
-        if (base.allPreInitUnique.isNotEmpty) {
-          preInitBuffer.write('''
-            initTypesUnique: $constPre ${base.allPreInitUnique.map((e) => e.name!).toList()},
+        if (base.allgroupList.isNotEmpty) {
+          listBuffer.write('''
+            groupList: $constPre ${base.allgroupList.map((e) => e.name!).toList()},
           ''');
         }
-        // if (hasPreInit) {
-        //   preInitBuffer.write('preRun: (preInit) {');
+        // if (haslist) {
+        //   listBuffer.write('preRun: (list) {');
         // }
-        // for (var item in base.preInitUnique) {
-        //   preInitBuffer.write('preInit<${item.name}>(shared: false);');
+        // for (var item in base.groupList) {
+        //   listBuffer.write('list<${item.name}>(shared: false);');
         // }
-        // for (var item in base.preInit) {
-        //   preInitBuffer.write('preInit<${item.name}>();');
+        // for (var item in base.list) {
+        //   listBuffer.write('list<${item.name}>();');
         // }
-        // if (preInitBuffer.isNotEmpty) {
-        //   preInitBuffer.write('},');
+        // if (listBuffer.isNotEmpty) {
+        //   listBuffer.write('},');
         // }
 
         var constPrefix = '';
@@ -196,8 +190,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
         final builderBuffer = StringBuffer();
         if (methods.isNotEmpty) {
-          final builds =
-              methods.map((e) => '$targetClassName.${e.name}').toList();
+          final builds = methods.map((e) => '$targetClassName.${e.name}').toList();
           if (pageConst) {
             builderBuffer.write('''builders: $builds,''');
           } else {
@@ -222,22 +215,24 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           memberName = '_$name';
         }
         final buf = StringBuffer();
+        final contextBuffer = StringBuffer();
 
-        if (base.allPreInitUnique.isNotEmpty) {
+        if (base.allgroupList.isNotEmpty) {
           final first = base.firstUnique;
 
           var owner = getDartMemberName(first.realName);
           if (!base.isRoot && mainElement.private) {
             owner = '_$owner';
           }
-          final isMainKey = base.groupKey;
+          final groupKey = base.groupKey;
           buf.write('''
               groupOwner: () => $owner,
-              groupKey: '$isMainKey',
+              groupKey: '$groupKey',
           ''');
-          parametersPosOrNamed.add('dynamic $isMainKey = false');
-          parametersNamedArgs.add("'$isMainKey': $isMainKey");
+          parametersPosOrNamed.add('$groupKey /* bool or String */');
+          parametersNamedArgs.add("'$groupKey': $groupKey");
           builderBuffer.write('group: group,');
+          contextBuffer.write('$groupKey ??= NopRoute.getGroupIdFromBuildContext(context);');
           constPrefix = '';
         }
         routes.write('''
@@ -248,7 +243,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
         $childrenBuffer
         builder: (context,arguments, group) =>
         $constPrefix Nop.page(
-        $preInitBuffer
+        $listBuffer
         $builderBuffer
         child: $baseChild,
         ), 
@@ -256,14 +251,14 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
       ''');
 
-        final args = parametersNamedArgs.isEmpty
-            ? 'const {}'
-            : '{${parametersNamedArgs.join(',')}}';
+        final args =
+            parametersNamedArgs.isEmpty ? 'const {}' : '{${parametersNamedArgs.join(',')}}';
         final funcName = mainElement.funcName(name);
         final route = mainElement.routeName(memberName);
         routeNav.write('''
     static NopRouteAction<T> $funcName<T>(
         {BuildContext? context, ${parametersPosOrNamed.join(',')}}) {
+      $contextBuffer
       return NopRouteAction(
           context: context, route: $route, arguments: $args);
     }
@@ -284,20 +279,18 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final pathName = value.getField('pathName')?.toStringValue();
     final main = value.getField('main')?.toTypeValue();
     final items = pages!.map(genItemElement).toList();
-    final preInit = value.getField('preInit')?.toListValue();
-    final preInitElement =
-        preInit!.map((e) => e.toTypeValue()!.element!).toSet();
-    final preInitUnique = value.getField('preInitUnique')?.toListValue();
-    final preInitUniqueElement =
-        preInitUnique!.map((e) => e.toTypeValue()!.element!).toSet();
+    final list = value.getField('list')?.toListValue();
+    final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
+    final groupList = value.getField('groupList')?.toListValue();
+    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final element = NopMainElement(
       className: className!,
       name: rootName!,
       pages: items,
       main: main!.element!,
-      preInit: preInitElement,
-      preInitUnique: preInitUniqueElement,
+      list: listElement,
+      groupList: groupListElement,
       private: private!,
       genKey: genKey!,
       pathName: pathName!,
@@ -315,19 +308,17 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final page = value.getField('page')?.toTypeValue();
     final pages = value.getField('pages')?.toListValue();
     final items = pages!.map(genItemElement).toList();
-    final preInit = value.getField('preInit')?.toListValue();
-    final preInitElement =
-        preInit!.map((e) => e.toTypeValue()!.element!).toSet();
-    final preInitUnique = value.getField('preInitUnique')?.toListValue();
-    final preInitUniqueElement =
-        preInitUnique!.map((e) => e.toTypeValue()!.element!).toSet();
+    final list = value.getField('list')?.toListValue();
+    final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
+    final groupList = value.getField('groupList')?.toListValue();
+    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final element = RouteItemElement(
       page: page!.element!,
       name: name!,
       pages: items,
-      preInit: preInitElement,
-      preInitUnique: preInitUniqueElement,
+      list: listElement,
+      groupList: groupListElement,
     );
     for (var item in items) {
       item.parent = element;
@@ -335,8 +326,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     return element;
   }
 
-  RouteBuilderItemElement genBuildElement(
-      DartObject meta, MethodElement method) {
+  RouteBuilderItemElement genBuildElement(DartObject meta, MethodElement method) {
     final pages = meta.getField('pages')?.toListValue();
     final pagesElement = pages!.map((e) => e.toTypeValue()!.element!).toList();
     return RouteBuilderItemElement(pages: pagesElement, method: method);
@@ -352,8 +342,8 @@ class NopMainElement with Base {
     this.genKey = false,
     this.pathName = '',
     required this.main,
-    this.preInit = const {},
-    this.preInitUnique = const {},
+    this.list = const {},
+    this.groupList = const {},
   });
   final String className;
   @override
@@ -396,9 +386,9 @@ class NopMainElement with Base {
   Element get page => main;
 
   @override
-  final Set<Element> preInit;
+  final Set<Element> list;
   @override
-  final Set<Element> preInitUnique;
+  final Set<Element> groupList;
 }
 
 class RouteItemElement with Base {
@@ -406,8 +396,8 @@ class RouteItemElement with Base {
     this.name = '',
     required this.page,
     this.pages = const [],
-    this.preInit = const {},
-    this.preInitUnique = const {},
+    this.list = const {},
+    this.groupList = const {},
   });
   @override
   final String name;
@@ -422,9 +412,9 @@ class RouteItemElement with Base {
   final List<RouteItemElement> pages;
 
   @override
-  final Set<Element> preInit;
+  final Set<Element> list;
   @override
-  final Set<Element> preInitUnique;
+  final Set<Element> groupList;
 }
 
 mixin Base {
@@ -447,32 +437,31 @@ mixin Base {
 
   List<RouteItemElement> get pages;
 
-  Set<Element> get preInit;
+  Set<Element> get list;
 
-  List<String> get preInitList => preInit.map((e) => e.name!).toList();
-  List<String> get preInitUniqueList =>
-      preInitUnique.map((e) => e.name!).toList();
+  List<String> get listList => list.map((e) => e.name!).toList();
+  List<String> get groupListList => groupList.map((e) => e.name!).toList();
 
-  Set<Element> get preInitUnique;
-  Set<Element> get allPreInitUnique {
+  Set<Element> get groupList;
+  Set<Element> get allgroupList {
     final first = firstUnique;
-    if (first.preInitUnique.isEmpty) return {};
-    final parentAllUnipue = first.preInitUnique;
-    final all = getChilrenPreInitUnique(first);
+    if (first.groupList.isEmpty) return {};
+    final parentAllUnipue = first.groupList;
+    final all = getChilrengroupList(first);
     return parentAllUnipue..addAll(all);
   }
 
-  static Set<Element> getChilrenPreInitUnique(Base base) {
+  static Set<Element> getChilrengroupList(Base base) {
     final _elements = <Element>{};
-    _elements.addAll(base.preInitUnique);
-    _elements.addAll(base.pages.expand(getChilrenPreInitUnique));
+    _elements.addAll(base.groupList);
+    _elements.addAll(base.pages.expand(getChilrengroupList));
     return _elements;
   }
 
   String? get groupName {
     final parentGroupName = parent?.groupName;
     if (parentGroupName == null) {
-      if (preInitUnique.isNotEmpty) {
+      if (groupList.isNotEmpty) {
         return realName;
       }
     }
@@ -497,7 +486,7 @@ mixin Base {
     Base? base = this;
     Base notEmptyParent = this;
     while (base != null) {
-      if (base.preInitUnique.isNotEmpty) {
+      if (base.groupList.isNotEmpty) {
         notEmptyParent = base;
       }
       base = base.parent;
@@ -508,8 +497,7 @@ mixin Base {
   static Set<String> getChilrenAllNamed(Base base) {
     final _elements = <String>{};
     _elements.addAll(base.allArgumentNames);
-    _elements
-        .addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
+    _elements.addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
     return _elements;
   }
 
@@ -518,7 +506,7 @@ mixin Base {
     return _groupKey = getGroupKey(firstUnique);
   }
 
-  static const defaultKey = 'nopIsMain';
+  static const defaultKey = 'groupId';
 
   static String? getGroupKey(Base base) {
     if (base._groupKey != null) return base._groupKey!;

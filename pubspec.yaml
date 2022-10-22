@@ -1,6 +1,6 @@
 name: nop_gen
 description: nop 代码生成
-version: 0.1.4
+version: 0.2.0
 repository: https://github.com/sersr/nop_gen
 
 environment:
