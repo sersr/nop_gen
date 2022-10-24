@@ -232,7 +232,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           parametersPosOrNamed.add('$groupKey /* bool or String */');
           parametersNamedArgs.add("'$groupKey': $groupKey");
           builderBuffer.write('group: group,');
-          contextBuffer.write('$groupKey ??= NopRoute.getGroupIdFromBuildContext(context);');
+          // contextBuffer.write('$groupKey ??= NopRoute.getGroupIdFromBuildContext(context);');
           constPrefix = '';
         }
         routes.write('''
