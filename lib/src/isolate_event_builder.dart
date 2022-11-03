@@ -133,9 +133,9 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
   String generateForAnnotatedElement(
       Element element, ConstantReader annotation, BuildStep buildStep) {
     if (element is ClassElement) {
-      final _root = gen(element);
+      final root = gen(element);
 
-      if (_root != null) return write(_root);
+      if (root != null) return write(root);
     }
 
     return '';
@@ -166,7 +166,7 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
 
     final multiItems = <String, ServerGroup>{};
 
-    void _add(ClassItem item) {
+    void add(ClassItem item) {
       final parentItem = getNonDefaultName(item);
       if (parentItem != null && item != parentItem) {
         item.connectToServer = parentItem.connectToServer;
@@ -194,24 +194,24 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       }
 
       for (var element in item.supers) {
-        _add(element);
+        add(element);
       }
     }
 
-    _add(root);
-    final _allItems = <ClassItem>[];
+    add(root);
+    final allItems = <ClassItem>[];
 
-    _allItems.addAll(root.supers.expand((element) => getTypes(element)));
+    allItems.addAll(root.supers.expand((element) => getTypes(element)));
     if (root.methods.isNotEmpty) {
-      _allItems.addAll(getTypes(root));
+      allItems.addAll(getTypes(root));
     }
     var hasLocal = false;
-    var _allItemsMessager = _allItems.map((e) {
+    var allItemsMessager = allItems.map((e) {
       hasLocal |= e.isLocal;
       return e.isLocal ? '${e.className}Resolve' : '${e.className}Messager';
     }).join(',');
-    _allItemsMessager = hasLocal ? 'Resolve,$_allItemsMessager' : _allItemsMessager;
-    final rootMessager = '${_allItemsMessager.isNotEmpty ? ',' : ''} $_allItemsMessager';
+    allItemsMessager = hasLocal ? 'Resolve,$allItemsMessager' : allItemsMessager;
+    final rootMessager = '${allItemsMessager.isNotEmpty ? ',' : ''} $allItemsMessager';
     buffer
       ..write(genMulitServer(root.className!, multiItems.values.toList(), rootMessager))
       ..write(writeItems(root, true));
@@ -220,55 +220,55 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
   }
 
   List<Methods> getMethods(ClassItem item) {
-    final _methods = <Methods>[];
-    _methods.addAll(item.methods);
+    final methods = <Methods>[];
+    methods.addAll(item.methods);
     if (!item.separate) {
-      _methods.addAll(item.supers.expand((e) => getMethods(e)));
+      methods.addAll(item.supers.expand((e) => getMethods(e)));
     }
-    return _methods;
+    return methods;
   }
 
   List<String?> getSupers(ClassItem item) {
-    final _supers = <String?>[];
-    _supers.add(item.className);
+    final supers = <String?>[];
+    supers.add(item.className);
     if (!item.separate) {
-      _supers.addAll(item.supers.expand((e) => getSupers(e)));
+      supers.addAll(item.supers.expand((e) => getSupers(e)));
     }
-    return _supers;
+    return supers;
   }
 
   /// 生成`Messager`、`Resolve`
   String writeItems(ClassItem item, [bool root = false]) {
     final buffer = StringBuffer();
-    final _funcs = <Methods>{};
-    final _supers = <String>{};
+    final funcs = <Methods>{};
+    final supers = <String>{};
 
     if (item.separate || root) {
-      _funcs.addAll(item.methods);
+      funcs.addAll(item.methods);
       buffer.writeAll(item.supers.map(writeItems));
     } else {
-      _funcs.addAll(getMethods(item));
-      _supers.addAll(getSupers(item).whereType<String>());
+      funcs.addAll(getMethods(item));
+      supers.addAll(getSupers(item).whereType<String>());
     }
 
     var dynamicFunction = StringBuffer();
 
     final lowServerName = getDartMemberName(item.serverName);
 
-    if (_funcs.isEmpty) return buffer.toString();
+    if (funcs.isEmpty) return buffer.toString();
 
     /// ------------ Resolve -------------------------------------
 
-    final _list = <String>[];
+    final list = <String>[];
 
-    final su = _supers.isEmpty ? '${item.className}' : _supers.join(',');
+    final su = supers.isEmpty ? '${item.className}' : supers.join(',');
     var impl = '';
-    _list.add(su);
+    list.add(su);
 
-    impl = _list.join(',');
+    impl = list.join(',');
 
     final closureBuffer = <String>[];
-    for (var f in _funcs) {
+    for (var f in funcs) {
       var parasOp = f.parametersNamedUsed.join(',');
       var paras = f.parameters.length == 1 && parasOp.isEmpty
           ? 'args'
@@ -322,7 +322,7 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
 
           }
         ''');
-    for (var e in _funcs) {
+    for (var e in funcs) {
       final returnType = (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
       final tranName = (e.useTransferType || !e.isDynamic) ? e.name : '${e.name}Dynamic';
 
@@ -398,9 +398,9 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
           }
           ''';
     }
-    final _supers = getSuperNames(defaultServer);
+    final supers = getSuperNames(defaultServer);
 
-    var supersResolve = _supers.map((e) => '${e}Resolve').join(',');
+    var supersResolve = supers.map((e) => '${e}Resolve').join(',');
     supersResolve = supersResolve.isNotEmpty ? ',$supersResolve' : '';
 
     var protBuffer = '';
@@ -503,9 +503,9 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
     final lowServerName = getDartMemberName(group.serverName);
     final upperServerName = getDartClassName(group.serverName);
 
-    final _supers = getSuperNames(group);
+    final supers = getSuperNames(group);
 
-    var supersResolve = _supers.map((e) => '${e}Resolve').join(',');
+    var supersResolve = supers.map((e) => '${e}Resolve').join(',');
     supersResolve = supersResolve.isNotEmpty ? ',$supersResolve' : '';
     var connectToOthers = '';
 
@@ -513,12 +513,12 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       // 要连接其他 `server` 需要 mixin [ResolveMultiRecievedMixin]
       connectToOthers = ',SendEventMixin,SendCacheMixin,ResolveMultiRecievedMixin';
       final buffer = StringBuffer();
-      final _allGroupSupers = <String>{};
+      final allGroupSupers = <String>{};
       for (var item in group.connectToOthersGroup) {
-        final _supers = getSuperNames(item);
-        _allGroupSupers.addAll(_supers);
+        final supers = getSuperNames(item);
+        allGroupSupers.addAll(supers);
       }
-      var supersMessager = _allGroupSupers.map((e) => '${e}Messager').join(',');
+      var supersMessager = allGroupSupers.map((e) => '${e}Messager').join(',');
 
       buffer.write(supersMessager);
       if (buffer.isNotEmpty) {
@@ -541,45 +541,45 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
   }
 
   List<ClassItem> getAllSupers(ClassItem item) {
-    final _list = <ClassItem>[];
+    final list = <ClassItem>[];
     if (item.supers.isNotEmpty) {
-      _list.addAll(item.supers);
-      _list.addAll(item.supers.expand((element) => getAllSupers(element)));
+      list.addAll(item.supers);
+      list.addAll(item.supers.expand((element) => getAllSupers(element)));
     }
-    return _list;
+    return list;
   }
 
   List<ClassItem> getTypes(ClassItem item) {
-    final _list = <ClassItem>{};
+    final list = <ClassItem>{};
     if (item.supers.isNotEmpty && item.separate) {
-      _list.addAll(item.supers.expand((e) => getTypes(e)));
+      list.addAll(item.supers.expand((e) => getTypes(e)));
     } else {
       if (item.methods.isNotEmpty || getMethods(item).isNotEmpty) {
-        _list.add(item);
+        list.add(item);
       }
     }
     // _list.addAll(item.privateProtocols.expand((e) => getTypes(e)));
 
-    return _list.toList();
+    return list.toList();
   }
 
   String writeMessageEnum(ClassItem item, [bool root = false]) {
     final buffer = StringBuffer();
 
-    final _funcs = <String>{};
-    _funcs.addAll(item.methods.map((e) => e.name!));
+    final funcs = <String>{};
+    funcs.addAll(item.methods.map((e) => e.name!));
     // buffer.writeAll(item.privateProtocols.map((e) => writeMessageEnum(e)));
     if (root || item.separate) {
       buffer.writeAll(item.supers.map((e) => writeMessageEnum(e)));
     } else {
-      _funcs.addAll(item.supers.expand((e) => e.methods.map((e) => e.name!)));
+      funcs.addAll(item.supers.expand((e) => e.methods.map((e) => e.name!)));
     }
     // _funcs.addAll(item.privateProtocols
     //     .expand((element) => getMethods(element).map((e) => e.name!)));
-    if (_funcs.isNotEmpty) {
+    if (funcs.isNotEmpty) {
       buffer
         ..write('enum ${item.messagerType}Message {\n')
-        ..write(_funcs.join(','))
+        ..write(funcs.join(','))
         ..write('\n}\n');
     }
     return buffer.toString();
@@ -588,18 +588,18 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
   ClassItem? genSuperType(InterfaceElement element) {
     if (element.supertype != null &&
         element.supertype!.getDisplayString(withNullability: false) != 'Object') {
-      return gen(element.supertype!.element2);
+      return gen(element.supertype!.element);
     }
     return null;
   }
 
   ClassItem? gen(InterfaceElement element, [ClassItem? parent]) {
-    final _item = ClassItem();
-    _item.parent = parent;
+    final item = ClassItem();
+    item.parent = parent;
 
     bool generate = true;
-    element.metadata.any((_e) {
-      final meta = _e.computeConstantValue();
+    element.metadata.any((e) {
+      final meta = e.computeConstantValue();
       final type = meta?.type?.getDisplayString(withNullability: false);
       if (isSameType<NopServerEventItem>(type)) {
         final messageName = meta?.getField('messageName')?.toStringValue();
@@ -619,11 +619,11 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
             serverName != null &&
             isLocal != null &&
             connectToServer != null) {
-          if (!_item.separate) _item.separate = separate;
-          _item.serverName = getDartMemberName(serverName);
-          _item.isLocal = isLocal;
-          if ((parent == null || _item.serverName.isNotEmpty) && connectToServer.isNotEmpty) {
-            _item.connectToServer = connectToServer
+          if (!item.separate) item.separate = separate;
+          item.serverName = getDartMemberName(serverName);
+          item.isLocal = isLocal;
+          if ((parent == null || item.serverName.isNotEmpty) && connectToServer.isNotEmpty) {
+            item.connectToServer = connectToServer
                 .map((e) => e.toStringValue())
                 .whereType<String>()
                 .map((e) => getDartMemberName(e))
@@ -652,29 +652,28 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
           // _item.privateProtocols = privates.toList();
           // }
 
-          if (messageName.isNotEmpty) _item.messagerType = messageName;
+          if (messageName.isNotEmpty) item.messagerType = messageName;
           return true;
         }
       } else if (isSameType<NopServerEvent>(type)) {
         // rootResolveName = meta?.getField('resolveName')?.toStringValue();
-        _item.separate = true;
+        item.separate = true;
       }
       return false;
     });
 
     if (!generate) return null;
 
-    final _ci = genSuperType(element);
-    if (_ci != null) _item.supers.add(_ci);
+    final ci = genSuperType(element);
+    if (ci != null) item.supers.add(ci);
 
-    _item.supers
-        .addAll(element.interfaces.map((e) => gen(e.element2, _item)).whereType<ClassItem>());
+    item.supers.addAll(element.interfaces.map((e) => gen(e.element, item)).whereType<ClassItem>());
 
-    _item.supers.addAll(element.mixins.map((e) => gen(e.element2, _item)).whereType<ClassItem>());
+    item.supers.addAll(element.mixins.map((e) => gen(e.element, item)).whereType<ClassItem>());
 
-    _item.className ??= element.name;
-    if (_item.messagerType.isEmpty) {
-      _item.messagerType = element.name;
+    item.className ??= element.name;
+    if (item.messagerType.isEmpty) {
+      item.messagerType = element.name;
     }
 
     for (var methodElement in element.methods) {
@@ -722,15 +721,15 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
         final data = element.computeConstantValue();
         final type = data?.type?.getDisplayString(withNullability: false);
         if (type == 'NopServerMethod') {
-          final _isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
-          final _useTransferType = data?.getField('useTransferType')?.toBoolValue() ?? false;
-          final _unique = data?.getField('unique')?.toBoolValue() ?? false;
-          final _cached = data?.getField('cached')?.toBoolValue() ?? false;
+          final isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
+          final useTransferType = data?.getField('useTransferType')?.toBoolValue() ?? false;
+          final unique = data?.getField('unique')?.toBoolValue() ?? false;
+          final cached = data?.getField('cached')?.toBoolValue() ?? false;
           method
-            ..isDynamic = _isDynamic
-            ..useTransferType = _useTransferType
-            ..unique = _unique
-            ..cached = _cached;
+            ..isDynamic = isDynamic
+            ..useTransferType = useTransferType
+            ..unique = unique
+            ..cached = cached;
 
           return true;
         }
@@ -738,9 +737,9 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       });
       method.getReturnNameTransferType(reader);
 
-      _item.methods.add(method);
+      item.methods.add(method);
     }
-    return _item;
+    return item;
   }
 
   // String? rootResolveName;

@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
@@ -52,10 +54,10 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
           final nop = nopDbItem.type?.getDisplayString(withNullability: false);
 
           if (isSameType<NopDb>(nop)) {
-            final _typetables = nopDbItem.getField('tables')?.toListValue();
+            final typetables = nopDbItem.getField('tables')?.toListValue();
 
-            if (_typetables != null && _typetables.isNotEmpty) {
-              tables.addAll(_typetables.map((e) => e.toTypeValue()));
+            if (typetables != null && typetables.isNotEmpty) {
+              tables.addAll(typetables.map((e) => e.toTypeValue()));
             }
           }
         }
@@ -63,23 +65,23 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
 
       final realDbTables = <String>[];
       final realDbTablesName = <String>[];
-      final _tablesList = <String>[];
+      final tablesList = <String>[];
 
       for (var element in tables) {
-        final e = element?.element2;
+        final e = element?.element;
 
         if (e is ClassElement) {
-          var _userTable = e.name;
+          var userTable = e.name;
           // auto gen
-          var genDbName = _userTable;
+          var genDbName = userTable;
           var databaseTable = 'Gen$genDbName';
           for (final medata in e.metadata) {
             final cs = medata.computeConstantValue();
             final tbName = cs?.getField('tableName')?.toStringValue();
             final table = cs?.getField('name')?.toStringValue();
             if (table != null && table.isNotEmpty) {
-              _userTable = table;
-              genDbName = _userTable;
+              userTable = table;
+              genDbName = userTable;
               databaseTable = 'Gen$genDbName';
             }
             if (tbName != null && tbName.isNotEmpty) {
@@ -92,7 +94,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
           realDbTablesName.add(genDbName);
           final columnInfos = getCols(e.fields);
 
-          _tablesList.add(createTable(_userTable, databaseTable, columnInfos));
+          tablesList.add(createTable(userTable, databaseTable, columnInfos));
         }
       }
 
@@ -112,7 +114,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
       buffer
         ..write(userToDb.join())
         ..write('\n\n}\n')
-        ..writeAll(_tablesList);
+        ..writeAll(tablesList);
     }
     return buffer.toString();
   }
@@ -145,7 +147,7 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
   //     .toList()
   //     .join('\n');
 
-  final _toMap = columnInfos.map((e) {
+  final toMap = columnInfos.map((e) {
     if (e.isJson) {
       return '\'${e.nameDb}\': _${e.typeJson}ToMap(table.${e.name})';
     }
@@ -163,7 +165,7 @@ String genTable(List<_ColumnInfo> columnInfos, String className) {
   //   ..write('}\n');
   buffer
     ..write('Map<String,dynamic> _${className}_toJson($className table){\n')
-    ..write('return {$_toMap};\n}\n');
+    ..write('return {$toMap};\n}\n');
   // ..write('}\n\n');
 
   return buffer.toString();
@@ -186,14 +188,14 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName, String da
   buffer.write(c);
   // function: createTable
   buffer.write('\n');
-  final _tableName = firstToLower(userTableName);
-  final _u = columnInfos.map(
-      (e) => 'if($_tableName.${e.name} != null) update.${e.name}.set($_tableName.${e.name});\n');
+  final tableName = firstToLower(userTableName);
+  final u = columnInfos
+      .map((e) => 'if($tableName.${e.name} != null) update.${e.name}.set($tableName.${e.name});\n');
   // update
   buffer
     ..write('void update$userTableName(UpdateStatement<$userTableName,')
-    ..write('$databaseTableName> update,$userTableName $_tableName){')
-    ..write(_u.join('\n'))
+    ..write('$databaseTableName> update,$userTableName $tableName){')
+    ..write(u.join('\n'))
     ..write('}\n\n');
 
   // createTable
@@ -215,7 +217,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName, String da
     ..write(')\';\n}\n');
 
   // function: toTable
-  final _parMap = columnInfos.map((e) {
+  final parMap = columnInfos.map((e) {
     if (e.isBool) {
       return '${e.name}: Table.intToBool(map[\'${e.nameDb}\'] as int?)';
     } else if (e.type == 'DateTime') {
@@ -228,7 +230,7 @@ String genTableDb(List<_ColumnInfo> columnInfos, String userTableName, String da
 
   buffer
     ..write('static $userTableName mapToTable(Map<String,dynamic> map) =>\n')
-    ..write(' $userTableName($_parMap);\n')
+    ..write(' $userTableName($parMap);\n')
     ..write(writeOver)
     ..write('List<$userTableName> toTable(Iterable<Map<String,Object?>> query) => ')
     ..write('query.map((e)=> mapToTable(e)).toList();')
@@ -251,19 +253,19 @@ String genStatement(List<_ColumnInfo> columnInfos, String userTableName, String 
   buffer.write(
       'extension ItemExtension$userTableName<T extends ItemExtension<$databaseTableName>> on T {\n');
 
-  final _items = columnInfos.map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');
-  final _tableItems = columnInfos.map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
+  final items = columnInfos.map((e) => 'T get ${e.name} => item(table.${e.name}) as T; \n');
+  final tableItems = columnInfos.map((e) => 'T get ${lowTableName}_${e.name} => ${e.name}; \n');
   buffer
-    ..writeAll(_items, '\n')
+    ..writeAll(items, '\n')
     ..write('\n\n')
-    ..writeAll(_tableItems, '\n')
+    ..writeAll(tableItems, '\n')
     ..write('}\n\n');
 
-  final _joinTableItems = columnInfos
+  final joinTableItems = columnInfos
       .map((e) => 'J get ${lowTableName}_${e.name} => joinItem(joinTable.${e.name}) as J; \n');
   buffer
     ..write('extension JoinItem$userTableName<J extends JoinItem<$databaseTableName>> on J{\n')
-    ..writeAll(_joinTableItems, '\n')
+    ..writeAll(joinTableItems, '\n')
     ..write('}\n\n');
 
   return buffer.toString();
@@ -278,8 +280,8 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       final nopDbItemMeta = i.computeConstantValue();
 
       if (nopDbItemMeta != null) {
-        final _typeName = nopDbItemMeta.type?.getDisplayString(withNullability: false);
-        if (isSameType<NopDbItem>(_typeName)) {
+        final typeName = nopDbItemMeta.type?.getDisplayString(withNullability: false);
+        if (isSameType<NopDbItem>(typeName)) {
           final name = nopDbItemMeta.getField('name')?.toStringValue();
 
           final addPrimaryKey = nopDbItemMeta.getField('primaryKey')?.toBoolValue();
@@ -294,11 +296,11 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       }
     }
     info.nameDb ??= e.name;
-    final _type = e.type.getDisplayString(withNullability: false);
+    final type = e.type.getDisplayString(withNullability: false);
     if (info.type != null) {
-      info.typeJson = _type;
+      info.typeJson = type;
     }
-    info.type ??= _type;
+    info.type ??= type;
     if (info.typeDb == null && !info.isJson) {
       // ignore: avoid_print
       print('不支持的类型没有提供具体类型 如：`@NopDbItem(type: String)`');

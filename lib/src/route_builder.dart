@@ -280,15 +280,15 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final main = value.getField('main')?.toTypeValue();
     final items = pages!.map(genItemElement).toList();
     final list = value.getField('list')?.toListValue();
-    final listElement = list!.map((e) => e.toTypeValue()!.element2!).toSet();
+    final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
-    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element2!).toSet();
+    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final element = NopMainElement(
       className: className!,
       name: rootName!,
       pages: items,
-      main: main!.element2!,
+      main: main!.element!,
       list: listElement,
       groupList: groupListElement,
       private: private!,
@@ -309,12 +309,12 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final pages = value.getField('pages')?.toListValue();
     final items = pages!.map(genItemElement).toList();
     final list = value.getField('list')?.toListValue();
-    final listElement = list!.map((e) => e.toTypeValue()!.element2!).toSet();
+    final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
-    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element2!).toSet();
+    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final element = RouteItemElement(
-      page: page!.element2!,
+      page: page!.element!,
       name: name!,
       pages: items,
       list: listElement,
@@ -328,7 +328,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
   RouteBuilderItemElement genBuildElement(DartObject meta, MethodElement method) {
     final pages = meta.getField('pages')?.toListValue();
-    final pagesElement = pages!.map((e) => e.toTypeValue()!.element2!).toList();
+    final pagesElement = pages!.map((e) => e.toTypeValue()!.element!).toList();
     return RouteBuilderItemElement(pages: pagesElement, method: method);
   }
 }
@@ -425,7 +425,7 @@ mixin Base {
   bool get isRoot => false;
   String get fullName {
     if (isRoot || parent == null) return '';
-    return parent!.fullName + '/' + realName;
+    return '${parent!.fullName}/$realName';
   }
 
   String get realName {
@@ -452,10 +452,10 @@ mixin Base {
   }
 
   static Set<Element> getChilrengroupList(Base base) {
-    final _elements = <Element>{};
-    _elements.addAll(base.groupList);
-    _elements.addAll(base.pages.expand(getChilrengroupList));
-    return _elements;
+    final elements = <Element>{};
+    elements.addAll(base.groupList);
+    elements.addAll(base.pages.expand(getChilrengroupList));
+    return elements;
   }
 
   String? get groupName {
