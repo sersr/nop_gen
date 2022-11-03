@@ -229,7 +229,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
               groupOwner: () => $owner,
               groupKey: '$groupKey',
           ''');
-          parametersPosOrNamed.add('$groupKey /* bool or String */');
+          parametersPosOrNamed.add('required $groupKey /* bool or String */');
           parametersNamedArgs.add("'$groupKey': $groupKey");
           builderBuffer.write('group: group,');
           // contextBuffer.write('$groupKey ??= NopRoute.getGroupIdFromBuildContext(context);');
@@ -495,10 +495,10 @@ mixin Base {
   }
 
   static Set<String> getChilrenAllNamed(Base base) {
-    final _elements = <String>{};
-    _elements.addAll(base.allArgumentNames);
-    _elements.addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
-    return _elements;
+    final elements = <String>{};
+    elements.addAll(base.allArgumentNames);
+    elements.addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
+    return elements;
   }
 
   String? get groupKey {
