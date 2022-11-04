@@ -13,7 +13,6 @@ dependencies:
   nop_annotations: ^0.2.0
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
+  test: ^1.16.4
   build_runner: any
-  flutter_lints: any
+  lints: ^2.0.0
