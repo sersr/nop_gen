@@ -18,7 +18,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
   }
 
   @override
-  generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) {
+  generateForAnnotatedElement(
+      Element element, ConstantReader annotation, BuildStep buildStep) {
     if (element is ClassElement) {
       for (var metaElement in element.metadata) {
         final meta = metaElement.computeConstantValue();
@@ -30,7 +31,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           for (var item in staticMethds) {
             for (var metaElement in item.metadata) {
               final meta = metaElement.computeConstantValue();
-              final metaName = meta?.type?.getDisplayString(withNullability: false);
+              final metaName =
+                  meta?.type?.getDisplayString(withNullability: false);
               if (isSameType<RouteBuilderItem>(metaName)) {
                 final part = genBuildElement(meta!, item);
                 final value = map[item];
@@ -53,7 +55,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
   late String targetClassName;
   late NopMainElement mainElement;
 
-  String generator(NopMainElement root, List<RouteBuilderItemElement> builders) {
+  String generator(
+      NopMainElement root, List<RouteBuilderItemElement> builders) {
     final buffer = StringBuffer();
     final bufferNav = StringBuffer();
     genRoute(root, builders, buffer, bufferNav);
@@ -126,14 +129,16 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           }
           parametersMessage.add(item.name);
           final requiredValue = item.isRequiredNamed ? 'required ' : '';
-          final defaultValue = item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
+          final defaultValue =
+              item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
           final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
 
           if (item.isOptionalPositional) {
             parametersPosOrNamed.add(fot);
             continue;
           } else if (item.isNamed) {
-            parametersNamedUsed.add('${item.name}: arguments[\'${item.name}\']');
+            parametersNamedUsed
+                .add('${item.name}: arguments[\'${item.name}\']');
             parametersNamedArgs.add("'${item.name}': ${item.name}");
             parametersPosOrNamed.add(fot);
             continue;
@@ -157,14 +162,16 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
         }
         final listBuffer = StringBuffer();
 
-        final pageConst = buffer.isEmpty && isConst && base.allgroupList.isEmpty;
+        final pageConst =
+            buffer.isEmpty && isConst && base.allgroupList.isEmpty;
         var constPre = pageConst ? '' : 'const ';
 
-        if (base.list.isNotEmpty) {
-          listBuffer.write('''
-            list: $constPre ${base.listList},
-          ''');
-        }
+        /// removed
+        // if (base.list.isNotEmpty) {
+        //   listBuffer.write('''
+        //     list: $constPre ${base.listList},
+        //   ''');
+        // }
         if (base.allgroupList.isNotEmpty) {
           listBuffer.write('''
             groupList: $constPre ${base.allgroupList.map((e) => e.name!).toList()},
@@ -190,7 +197,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
         final builderBuffer = StringBuffer();
         if (methods.isNotEmpty) {
-          final builds = methods.map((e) => '$targetClassName.${e.name}').toList();
+          final builds =
+              methods.map((e) => '$targetClassName.${e.name}').toList();
           if (pageConst) {
             builderBuffer.write('''builders: $builds,''');
           } else {
@@ -251,8 +259,9 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
       ''');
 
-        final args =
-            parametersNamedArgs.isEmpty ? 'const {}' : '{${parametersNamedArgs.join(',')}}';
+        final args = parametersNamedArgs.isEmpty
+            ? 'const {}'
+            : '{${parametersNamedArgs.join(',')}}';
         final funcName = mainElement.funcName(name);
         final route = mainElement.routeName(memberName);
         routeNav.write('''
@@ -282,7 +291,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final list = value.getField('list')?.toListValue();
     final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
-    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
+    final groupListElement =
+        groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final element = NopMainElement(
       className: className!,
@@ -311,7 +321,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final list = value.getField('list')?.toListValue();
     final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
-    final groupListElement = groupList!.map((e) => e.toTypeValue()!.element!).toSet();
+    final groupListElement =
+        groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final element = RouteItemElement(
       page: page!.element!,
@@ -326,7 +337,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     return element;
   }
 
-  RouteBuilderItemElement genBuildElement(DartObject meta, MethodElement method) {
+  RouteBuilderItemElement genBuildElement(
+      DartObject meta, MethodElement method) {
     final pages = meta.getField('pages')?.toListValue();
     final pagesElement = pages!.map((e) => e.toTypeValue()!.element!).toList();
     return RouteBuilderItemElement(pages: pagesElement, method: method);
@@ -497,7 +509,8 @@ mixin Base {
   static Set<String> getChilrenAllNamed(Base base) {
     final elements = <String>{};
     elements.addAll(base.allArgumentNames);
-    elements.addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
+    elements
+        .addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
     return elements;
   }
 
