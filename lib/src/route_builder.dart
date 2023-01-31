@@ -59,16 +59,30 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
       NopMainElement root, List<RouteBuilderItemElement> builders) {
     final buffer = StringBuffer();
     final bufferNav = StringBuffer();
-    genRoute(root, builders, buffer, bufferNav);
-    var name = root.realClassName;
+    final memberBuffer = StringBuffer();
 
+    var name = root.realClassName;
     final className = getDartClassName(name);
+    genRoute(root, name, builders, buffer, memberBuffer, bufferNav);
+
     final genBuffer = StringBuffer();
     genBuffer.write('// ignore_for_file: prefer_const_constructors\n\n');
     if (root.isSameClass) {
       genBuffer.write('''
     class $className {
-      $buffer
+      $className._() {
+        _init();
+      }
+      static $className? _instance;
+
+      factory $className({bool newInstance = false}) {
+        return _instance ??= $className._();
+      }
+
+      void _init() {
+        $buffer
+      }
+      $memberBuffer
       $bufferNav
     }
   ''');
@@ -76,8 +90,23 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
       final pathClassName = getDartClassName(root.realPathName);
       genBuffer.write('''
     class $className {
-      $className._();
-      $buffer
+      $className._(){
+        _init();
+      }
+
+      static $className? _instance;
+      
+      factory $className({bool newInstance = false}) {
+        if(!newInstance && _instance != null) {
+          return _instance!;
+        }
+        return _instance = $className._();
+      }
+
+      void _init() {
+        $buffer
+      }
+      $memberBuffer
     }
   ''');
       genBuffer.write('''
@@ -92,8 +121,10 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
   void genRoute(
     Base base,
+    String className,
     List<RouteBuilderItemElement> builders,
     StringBuffer routes,
+    StringBuffer memberBuffer,
     StringBuffer routeNav, {
     String currentPath = '',
   }) {
@@ -210,12 +241,12 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           var memberName = getDartMemberName(e.realName);
           if (mainElement.private) memberName = '_$memberName';
 
-          return memberName;
+          return '_$memberName';
         }).toList();
 
         var childrenBuffer = '';
         if (children.isNotEmpty) {
-          childrenBuffer = 'children: $children,';
+          childrenBuffer = 'childrenLate:() => $children,';
         }
 
         var memberName = name;
@@ -232,19 +263,32 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           if (!base.isRoot && mainElement.private) {
             owner = '_$owner';
           }
+
+          // final isCurrent = base == first;
+          final groupOwner = '() => _$owner';
           final groupKey = base.groupKey;
           buf.write('''
-              groupOwner: () => $owner,
+              groupOwnerLate:  $groupOwner,
               groupKey: '$groupKey',
           ''');
+
           parametersPosOrNamed.add('required $groupKey /* bool or String */');
           parametersNamedArgs.add("'$groupKey': $groupKey");
           builderBuffer.write('group: group,');
           // contextBuffer.write('$groupKey ??= NopRoute.getGroupIdFromBuildContext(context);');
           constPrefix = '';
         }
+
+        var prKey =
+            'static NopRoute get $memberName => $className()._$memberName;';
+
+        memberBuffer.write('''
+            late final NopRoute _$memberName;
+            $prKey
+          ''');
+
         routes.write('''
-      static final $memberName = NopRoute(
+     _$memberName = NopRoute(
         name: '$routeName',
         fullName: '$fullName',
         $buf
@@ -275,7 +319,8 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
       }
     }
     for (var page in base.pages) {
-      genRoute(page, builders, routes, routeNav, currentPath: fullName);
+      genRoute(page, className, builders, routes, memberBuffer, routeNav,
+          currentPath: fullName);
     }
   }
 
