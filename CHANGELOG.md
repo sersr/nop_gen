@@ -1,9 +1,16 @@
+  
+# 0.2.4
+
+fix `top_level_cycle`
+
 ## 0.2.1+2
 
 * update route
 
 ## 0.1.3
+
 * 支持生成路由代码
+
 ## 0.1.0
 
 * 支持多个 `Isolate` 通信
