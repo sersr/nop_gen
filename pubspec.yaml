@@ -4,7 +4,7 @@ version: 0.2.4
 repository: https://github.com/sersr/nop_gen
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter_nop: ">=2.1.4 <3.0.0"

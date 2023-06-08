@@ -82,10 +82,13 @@ class Methods {
       final itemElement = reader.findType(itemNotNull);
 
       if (itemElement is ClassElement) {
-        useSameReturnType = itemElement.allSupertypes.any(
-            (element) => element.getDisplayString(withNullability: false).contains(currentItem));
+        useSameReturnType = itemElement.allSupertypes.any((element) => element
+            .getDisplayString(withNullability: false)
+            .contains(currentItem));
       }
-      name = useSameReturnType ? returnType.toString() : '$prefex<TransferType<$item>>';
+      name = useSameReturnType
+          ? returnType.toString()
+          : '$prefex<TransferType<$item>>';
       return '';
     });
     return name;
@@ -104,11 +107,12 @@ class Methods {
       returnTypeName = replace('Stream', returnName, reader);
     }
 
-    return _getReturnNameTransferType = useTransferType && returnTypeName.isNotEmpty
-        ? returnTypeName
-        : isDynamic
-            ? 'dynamic'
-            : returnType.toString();
+    return _getReturnNameTransferType =
+        useTransferType && returnTypeName.isNotEmpty
+            ? returnTypeName
+            : isDynamic
+                ? 'dynamic'
+                : returnType.toString();
   }
 
   @override
@@ -121,7 +125,8 @@ bool useOption(String source, LibraryReader reader) {
   return RegExp('<Option(.*)>\$').hasMatch(source);
 }
 
-class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServerEvent> {
+class ServerEventGeneratorForAnnotation
+    extends GeneratorForAnnotation<NopServerEvent> {
   late LibraryReader reader;
   @override
   FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
@@ -178,17 +183,18 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       //   element.isProtocols = true;
       // }
 
-      final group = multiItems.putIfAbsent(item.serverName, () => ServerGroup(item.serverName));
-      if (!group.currentItems
-          .any((e) => e != root && !e.separate && getAllSupers(e).contains(item))) {
+      final group = multiItems.putIfAbsent(
+          item.serverName, () => ServerGroup(item.serverName));
+      if (!group.currentItems.any(
+          (e) => e != root && !e.separate && getAllSupers(e).contains(item))) {
         group.addCurerntItem(item);
       }
       // item.privateProtocols.forEach(group.addCurerntItem);
       final connectTo = item.connectToServer;
       for (var connectToServerName in connectTo) {
         if (connectToServerName == item.serverName) continue;
-        final other =
-            multiItems.putIfAbsent(connectToServerName, () => ServerGroup(connectToServerName));
+        final other = multiItems.putIfAbsent(
+            connectToServerName, () => ServerGroup(connectToServerName));
         other.addConnect(item);
         group.addConnectToGroup(other);
       }
@@ -210,10 +216,12 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       hasLocal |= e.isLocal;
       return e.isLocal ? '${e.className}Resolve' : '${e.className}Messager';
     }).join(',');
-    allItemsMessager = hasLocal ? 'Resolve,$allItemsMessager' : allItemsMessager;
-    final rootMessager = '${allItemsMessager.isNotEmpty ? ',' : ''} $allItemsMessager';
+    allItemsMessager =
+        hasLocal ? 'Resolve,$allItemsMessager' : allItemsMessager;
+    final rootMessager =
+        '${allItemsMessager.isNotEmpty ? ',' : ''} $allItemsMessager';
     buffer
-      ..write(genMulitServer(root.className!, multiItems.values.toList(), rootMessager))
+      ..write(genMulitServer(multiItems.values.toList(), rootMessager))
       ..write(writeItems(root, true));
 
     return buffer.toString();
@@ -272,9 +280,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       var parasOp = f.parametersNamedUsed.join(',');
       var paras = f.parameters.length == 1 && parasOp.isEmpty
           ? 'args'
-          : List.generate(
-                  f.parameters.length - f.parametersNamedUsed.length, (index) => 'args[$index]')
-              .join(',');
+          : List.generate(f.parameters.length - f.parametersNamedUsed.length,
+              (index) => 'args[$index]').join(',');
       if (paras.isNotEmpty && parasOp.isNotEmpty) {
         parasOp = ',$parasOp';
       }
@@ -286,7 +293,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
       }
       if (f.useDynamic) {
         final name = f.getReturnNameTransferType(reader);
-        dynamicFunction.write('$name ${f.name}Dynamic(${f.parameters.join(',')});');
+        dynamicFunction
+            .write('$name ${f.name}Dynamic(${f.parameters.join(',')});');
       }
       final para = '$paras$parasOp';
       if (para == 'args') {
@@ -295,7 +303,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
         closureBuffer.add('(args) => $tranName($para)');
       }
     }
-    buffer.write('mixin ${item.className}Resolve on Resolve implements $impl {\n');
+    buffer.write(
+        'mixin ${item.className}Resolve on Resolve implements $impl {\n');
     buffer.writeln('''
             Map<String, List<Type>> getResolveProtocols()  {
               return super.getResolveProtocols()
@@ -323,8 +332,10 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
           }
         ''');
     for (var e in funcs) {
-      final returnType = (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
-      final tranName = (e.useTransferType || !e.isDynamic) ? e.name : '${e.name}Dynamic';
+      final returnType =
+          (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
+      final tranName =
+          (e.useTransferType || !e.isDynamic) ? e.name : '${e.name}Dynamic';
 
       buffer.write('$returnType $tranName(${e.parameters.join(',')})');
       final para = e.parametersMessageList.isEmpty
@@ -356,8 +367,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
         }
         list.add('serverName: $lowServerName');
         named = ',${list.join(',')}';
-        buffer
-            .write('{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
+        buffer.write(
+            '{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
       } else {
         buffer.write('{');
       }
@@ -372,7 +383,7 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
   /// 生成多个[Server]mixins
   /// 初始化时检测协议匹配
   /// 子隔离之间通信实现，连接时检测协议
-  String genMulitServer(String rootClassName, List<ServerGroup> groups, String rootMessager) {
+  String genMulitServer(List<ServerGroup> groups, String rootMessager) {
     final buffer = StringBuffer();
     final defaultServer = groups[0];
     final upperServerName = getDartClassName(defaultServer.serverName);
@@ -383,7 +394,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
     final connectToLocal = StringBuffer();
 
     for (var group in groups) {
-      genConnectToServer(group, create, connectTo, connectToLocal, prot, (serverName) {
+      genConnectToServer(group, create, connectTo, connectToLocal, prot,
+          (serverName) {
         return groups.firstWhere((element) => element.serverName == serverName);
       });
       genServerResolve(group, genResolve);
@@ -415,7 +427,7 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
 
     buffer.writeln('''
         /// 主入口
-        abstract class Multi${upperServerName}MessagerMain  with $rootClassName, ListenMixin, SendEventMixin, SendMultiServerMixin $rootMessager {
+        abstract class Multi${upperServerName}MessagerMain with ListenMixin, SendEventMixin, SendMultiServerMixin $rootMessager {
           $create
           $protBuffer
           $connectToBuffer
@@ -511,7 +523,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
 
     if (group.connectToOthersGroup.isNotEmpty) {
       // 要连接其他 `server` 需要 mixin [ResolveMultiRecievedMixin]
-      connectToOthers = ',SendEventMixin,SendCacheMixin,ResolveMultiRecievedMixin';
+      connectToOthers =
+          ',SendEventMixin,SendCacheMixin,ResolveMultiRecievedMixin';
       final buffer = StringBuffer();
       final allGroupSupers = <String>{};
       for (var item in group.connectToOthersGroup) {
@@ -587,7 +600,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
 
   ClassItem? genSuperType(InterfaceElement element) {
     if (element.supertype != null &&
-        element.supertype!.getDisplayString(withNullability: false) != 'Object') {
+        element.supertype!.getDisplayString(withNullability: false) !=
+            'Object') {
       return gen(element.supertype!.element);
     }
     return null;
@@ -606,7 +620,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
         final separate = meta?.getField('separate')?.toBoolValue();
         generate = meta?.getField('generate')?.toBoolValue() ?? generate;
         final serverName = meta?.getField('serverName')?.toStringValue();
-        final connectToServer = meta?.getField('connectToServer')?.toListValue();
+        final connectToServer =
+            meta?.getField('connectToServer')?.toListValue();
         // final privateProtocols = meta
         //     ?.getField('privateProtocols')
         //     ?.toListValue()
@@ -622,7 +637,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
           if (!item.separate) item.separate = separate;
           item.serverName = getDartMemberName(serverName);
           item.isLocal = isLocal;
-          if ((parent == null || item.serverName.isNotEmpty) && connectToServer.isNotEmpty) {
+          if ((parent == null || item.serverName.isNotEmpty) &&
+              connectToServer.isNotEmpty) {
             item.connectToServer = connectToServer
                 .map((e) => e.toStringValue())
                 .whereType<String>()
@@ -667,9 +683,12 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
     final ci = genSuperType(element);
     if (ci != null) item.supers.add(ci);
 
-    item.supers.addAll(element.interfaces.map((e) => gen(e.element, item)).whereType<ClassItem>());
+    item.supers.addAll(element.interfaces
+        .map((e) => gen(e.element, item))
+        .whereType<ClassItem>());
 
-    item.supers.addAll(element.mixins.map((e) => gen(e.element, item)).whereType<ClassItem>());
+    item.supers.addAll(
+        element.mixins.map((e) => gen(e.element, item)).whereType<ClassItem>());
 
     item.className ??= element.name;
     if (item.messagerType.isEmpty) {
@@ -691,7 +710,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
         count++;
         parametersMessage.add(item.name);
         final requiredValue = item.isRequiredNamed ? 'required ' : '';
-        final defaultValue = item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
+        final defaultValue =
+            item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
         final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
 
         if (item.isOptionalPositional) {
@@ -722,7 +742,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
         final type = data?.type?.getDisplayString(withNullability: false);
         if (type == 'NopServerMethod') {
           final isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
-          final useTransferType = data?.getField('useTransferType')?.toBoolValue() ?? false;
+          final useTransferType =
+              data?.getField('useTransferType')?.toBoolValue() ?? false;
           final unique = data?.getField('unique')?.toBoolValue() ?? false;
           final cached = data?.getField('cached')?.toBoolValue() ?? false;
           method
@@ -745,8 +766,8 @@ class ServerEventGeneratorForAnnotation extends GeneratorForAnnotation<NopServer
   // String? rootResolveName;
 }
 
-Builder isolateEventBuilder(BuilderOptions options) =>
-    SharedPartBuilder([ServerEventGeneratorForAnnotation()], 'nop_isolate_event');
+Builder isolateEventBuilder(BuilderOptions options) => SharedPartBuilder(
+    [ServerEventGeneratorForAnnotation()], 'nop_isolate_event');
 
 String getToCamel(String name) {
   return name.replaceAllMapped(RegExp('[_-]([A-Za-z]+)'), (match) {
