@@ -32,3 +32,10 @@ builders:
     auto_apply: dependents
     build_to: cache
     applies_builders: ["source_gen|combining_builder"]
+  nop_router:
+    import: "package:nop_gen/src/router_builder.dart"
+    builder_factories: ["routerMainBuilder"]
+    build_extensions: { ".dart": ["router.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]

@@ -17,3 +17,7 @@ dev_dependencies:
   test: ^1.16.4
   build_runner: any
   lints: ^2.0.0
+
+dependency_overrides:
+  nop_annotations:
+    path: ../nop_annotations

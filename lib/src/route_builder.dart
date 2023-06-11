@@ -334,6 +334,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     final main = value.getField('main')?.toTypeValue();
     final items = pages!.map(genItemElement).toList();
     final list = value.getField('list')?.toListValue();
+    print('...$value\n $pages');
     final listElement = list!.map((e) => e.toTypeValue()!.element!).toSet();
     final groupList = value.getField('groupList')?.toListValue();
     final groupListElement =
