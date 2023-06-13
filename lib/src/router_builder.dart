@@ -142,7 +142,8 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       routeName = '/';
       fullName = '/';
     } else {
-      routeName = '/$name';
+      // routeName = '/$name';
+      routeName = name;
       if (fullName.endsWith('/')) {
         fullName += name;
       } else {
@@ -323,9 +324,10 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         )''';
 
     if (base.pageBuilderName != null) {
-      pageBuilder = '${base.pageBuilderName}($constPrefix $nopWidget)';
+      pageBuilder = '${base.pageBuilderName}(entry, $constPrefix $nopWidget)';
     } else {
-      pageBuilder = 'MaterialPage(child:$constPrefix $nopWidget)';
+      pageBuilder =
+          'MaterialIgnorePage(key: entry.pageKey, child:$constPrefix $nopWidget)';
     }
     routes.write('''
      _$memberName = $nPage(
