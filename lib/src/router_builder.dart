@@ -170,31 +170,46 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     if (element == null) return;
 
     final parameters = <String>[];
-    final parametersMessage = <String>[];
+    // final parametersMessage = <String>[];
     final parametersPosOrNamed = <String>[];
     final parametersNamedUsed = <String>[];
     final parametersNamedArgs = <String>[];
-    var paramFrom = 'entry.params';
+    final parametersNamedQueryArgs = <String>[];
+    final pathNames = <String>[];
+
     for (var item in element.parameters) {
       if (!mainElement.genKey && item.name == 'key') {
         continue;
       }
-      parametersMessage.add(item.name);
-      final requiredValue = item.isRequiredNamed ? 'required ' : '';
+      final paramNote = getParamNote<Param>(item.metadata);
+      var paramFrom = paramNote.isQuery ? 'entry.queryParams' : 'entry.params';
+      final itemName = paramNote.getName(item.name);
+
+      final requiredValue =
+          item.isRequiredNamed && !item.hasDefaultValue ? 'required ' : '';
       final defaultValue =
           item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
-      final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
+      final fot = '$requiredValue${item.type} $itemName$defaultValue';
+      if (paramNote.isQuery) {
+        parametersNamedQueryArgs.add("'$itemName': $itemName");
+      } else {
+        pathNames.add(itemName);
+        parametersNamedArgs.add("'$itemName': $itemName");
+      }
 
       if (item.isOptionalPositional) {
         parametersPosOrNamed.add(fot);
+        parametersNamedUsed.add('$paramFrom[\'$itemName\']');
         continue;
       } else if (item.isNamed) {
-        parametersNamedUsed.add('${item.name}: $paramFrom[\'${item.name}\']');
-        parametersNamedArgs.add("'${item.name}': ${item.name}");
+        parametersNamedUsed.add('${item.name}: $paramFrom[\'$itemName\']');
+        // parametersNamedArgs.add("'$itemName': $itemName");
         parametersPosOrNamed.add(fot);
         continue;
       }
-      parameters.add('$paramFrom[\'${item.name}\']');
+      // parametersNamedArgs.add("'$itemName': $itemName");
+      parameters.add('$paramFrom[\'$itemName\']');
+      parametersPosOrNamed.add('required ${item.type} $itemName$defaultValue');
     }
     final buffer = StringBuffer();
     buffer.writeAll(parameters, ',');
@@ -329,19 +344,27 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       pageBuilder =
           'MaterialIgnorePage(key: entry.pageKey, child:$constPrefix $nopWidget)';
     }
+
+    final pathName =
+        pathNames.isEmpty ? routeName : '$routeName/:${pathNames.join('/:')}';
     routes.write('''
      _$memberName = $nPage(
         $buf
         $childrenBuffer
-        path: '$routeName',
+        path: '$pathName',
         pageBuilder: (entry) => $pageBuilder,
       );
 
       ''');
 
     final args = parametersNamedArgs.isEmpty
-        ? 'const {}'
-        : '{${parametersNamedArgs.join(',')}}';
+        ? ''
+        : ', params: {${parametersNamedArgs.join(',')}}';
+
+    final query = parametersNamedQueryArgs.isEmpty
+        ? ''
+        : ', extra: {${parametersNamedQueryArgs.join(',')}}';
+
     final funcName = mainElement.funcName(base.mainClassName(dot: false));
     final route = mainElement.routeName(memberName);
     final router = mainElement.routeName(mainElement.routerName);
@@ -352,7 +375,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     routeNav.write('''
         $seeGroupKey
         static RouterAction $funcName($params) {
-          return RouterAction($route, $router, params: $args$groupParam);
+          return RouterAction($route, $router$args$query$groupParam);
         }
       ''');
     //     routeNav.write('''
@@ -465,6 +488,34 @@ String? fnName(ExecutableElement? fn, {bool dot = true}) {
     return fn.name;
   }
   return null;
+}
+
+ParamNote getParamNote<T>(List<ElementAnnotation> list) {
+  for (var item in list) {
+    final meta = item.computeConstantValue();
+    final metaName = meta?.type?.getDisplayString(withNullability: false);
+    if (isSameType<T>(metaName)) {
+      final name = meta!.getField('name')?.toStringValue();
+      final isQuery = meta.getField('isQuery')?.toBoolValue();
+      if (name != null && isQuery != null) {
+        return ParamNote(name, isQuery);
+      }
+    }
+  }
+  return ParamNote('', true);
+}
+
+class ParamNote {
+  ParamNote(this.name, this.isQuery);
+  final String name;
+  final bool isQuery;
+
+  String getName(String baseName) {
+    if (name.isEmpty) {
+      return baseName;
+    }
+    return name;
+  }
 }
 
 class NopMainElement with Base {
