@@ -63,7 +63,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     var name = root.realClassName;
     final className = getDartClassName(name);
-    final rootName = getDartMemberName(root.realName);
+    final rootName = getDartMemberName(root.realMemName(dot: false));
     memberBuffer.write('''
     static NRouter get ${root.realRouterName} => $className()._${root.realRouterName};
     late final NRouter _${root.realRouterName} = NRouter(rootPage: $rootName);
@@ -133,9 +133,9 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     StringBuffer routeNav, {
     String currentPath = '',
   }) {
-    var mainClassName = base.mainClassName();
+    var mainClassName = base.classCallName();
 
-    var name = getDartMemberName(base.mainClassName(dot: false));
+    var name = getDartMemberName(base.realMemName(dot: false));
     var routeName = '/';
     var fullName = currentPath;
     if (base.isRoot) {
@@ -276,7 +276,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     }
 
     var children = base.pages.map((e) {
-      var memberName = getDartMemberName(e.mainClassName(dot: false));
+      var memberName = getDartMemberName(e.realMemName(dot: false));
       if (mainElement.private) memberName = '_$memberName';
 
       return '_$memberName';
@@ -299,7 +299,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     if (base.allgroupList.isNotEmpty) {
       final first = base.firstUnique;
 
-      var owner = getDartMemberName(first.realName);
+      var owner = getDartMemberName(first.realMemName(dot: false));
       if (!base.isRoot && mainElement.private) {
         owner = '_$owner';
       }
@@ -365,7 +365,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         ? ''
         : ', extra: {${parametersNamedQueryArgs.join(',')}}';
 
-    final funcName = mainElement.funcName(base.mainClassName(dot: false));
+    final funcName = mainElement.funcName(base.realMemName(dot: false));
     final route = mainElement.routeName(memberName);
     final router = mainElement.routeName(mainElement.routerName);
 
@@ -403,8 +403,10 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     final groupListElement =
         groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
+    final reg = value.getField('classToNameReg')?.toStringValue() ?? '';
     final element = NopMainElement(
       className: className!,
+      classToNameReg: reg,
       name: rootName!,
       pages: items,
       main: main?.element,
@@ -438,8 +440,11 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     final groupListElement =
         groupList!.map((e) => e.toTypeValue()!.element!).toSet();
+    final reg = value.getField('classToNameReg')?.toStringValue();
+
     final element = RouteItemElement(
       page: page?.element,
+      classToNameArgCurrent: reg,
       pageBuilderElement: pagev,
       name: name!,
       pages: items,
@@ -474,16 +479,22 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   }
 }
 
-String? fnName(ExecutableElement? fn, {bool dot = true}) {
+String? fnName(ExecutableElement? fn, {bool dot = true, String reg = ''}) {
   if (fn != null) {
     if (fn is ClassMemberElement) {
       final cls = fn.enclosingElement as ClassElement;
-      final name = cls.name;
+      var name = cls.name;
+      if (reg.isNotEmpty) {
+        name = name.replaceAll(RegExp(reg), '');
+      }
       if (dot) {
         return '$name.${fn.name}';
       }
 
       return '${name}_${(fn.name)}';
+    }
+    if (reg.isNotEmpty) {
+      return fn.name.replaceAll(RegExp(reg), '');
     }
     return fn.name;
   }
@@ -521,6 +532,7 @@ class ParamNote {
 class NopMainElement with Base {
   NopMainElement({
     this.className = '',
+    this.classToNameReg = '',
     this.routerName = 'router',
     this.name = '',
     this.pages = const [],
@@ -533,6 +545,8 @@ class NopMainElement with Base {
     this.pageBuilderName,
   });
   final String className;
+  @override
+  final String classToNameReg;
   @override
   final String name;
   @override
@@ -586,6 +600,7 @@ class RouteItemElement with Base {
   RouteItemElement({
     this.name = '',
     this.page,
+    this.classToNameArgCurrent,
     this.pageBuilderElement,
     this.pages = const [],
     this.groupList = const {},
@@ -593,6 +608,16 @@ class RouteItemElement with Base {
   });
   @override
   final String name;
+
+  final String? classToNameArgCurrent;
+  @override
+  String get classToNameReg {
+    if (classToNameArgCurrent == null) {
+      return parent?.classToNameReg ?? '';
+    }
+    return classToNameArgCurrent!;
+  }
+
   @override
   late final Base? parent;
 
@@ -619,20 +644,34 @@ mixin Base {
   Base? get parent;
   ClassElement? get classElement => page as ClassElement?;
   bool get isRoot => false;
-  String get fullName {
-    if (isRoot || parent == null) return '';
-    return '${parent!.fullName}/$realName';
+  // String get fullName {
+  //   if (isRoot || parent == null) return '';
+  //   return '${parent!.fullName}/$realName';
+  // }
+
+  String get classToNameReg;
+
+  String? get _className {
+    final name = classElement?.name;
+
+    if (name != null && name.isNotEmpty && classToNameReg.isNotEmpty) {
+      return name.replaceAll(RegExp(classToNameReg), '');
+    }
+    return null;
   }
 
-  String mainClassName({bool dot = true}) {
+  /// 真实类名，不可改变
+  String classCallName({bool dot = true}) {
     return classElement?.name ?? fnName(pageBuilderElement!, dot: dot)!;
   }
 
-  String get realName {
-    if (name.isEmpty) {
-      return classElement?.name ?? pageBuilderElement!.name;
+  /// 变量名称
+  String realMemName({bool dot = true}) {
+    if (name.isNotEmpty) {
+      return name;
     }
-    return name;
+    return _className ??
+        fnName(pageBuilderElement!, dot: dot, reg: classToNameReg)!;
   }
 
   List<RouteItemElement> get pages;
@@ -654,16 +693,6 @@ mixin Base {
     elements.addAll(base.groupList);
     elements.addAll(base.pages.expand(getChilrengroupList));
     return elements;
-  }
-
-  String? get groupName {
-    final parentGroupName = parent?.groupName;
-    if (parentGroupName == null) {
-      if (groupList.isNotEmpty) {
-        return realName;
-      }
-    }
-    return parentGroupName;
   }
 
   List<String> get allArgumentNames {
