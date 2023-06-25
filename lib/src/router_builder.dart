@@ -64,56 +64,59 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     var name = root.realClassName;
     final className = getDartClassName(name);
     final rootName = getDartMemberName(root.realMemName(dot: false));
+    final restorationId = root.restoratoinId == null
+        ? ''
+        : 'restorationId: \'${root.restoratoinId}\',';
     memberBuffer.write('''
-    static NRouter get ${root.realRouterName} => $className()._${root.realRouterName};
-    late final NRouter _${root.realRouterName} = NRouter(rootPage: $rootName);
+    late final NRouter _${root.realRouterName};
+    static NRouter get ${root.realRouterName} => _instance!._${root.realRouterName};
     ''');
     genRoute(root, name, builders, buffer, memberBuffer, bufferNav);
 
+    buffer.write('''
+   _${root.realRouterName} = NRouter(
+      rootPage: _$rootName,
+      $restorationId
+      params :params,
+      extra: extra,
+      groupId: groupId,
+     );
+''');
+
     final genBuffer = StringBuffer();
     genBuffer.write('// ignore_for_file: prefer_const_constructors\n\n');
-    if (root.isSameClass) {
-      genBuffer.write('''
-    class $className {
-      $className._() {
-        _init();
-      }
-      static $className? _instance;
 
-      factory $className({bool newInstance = false}) {
-        return _instance ??= $className._();
-      }
-
-      void _init() {
-        $buffer
-      }
-      $memberBuffer
-      $bufferNav
-    }
-  ''');
-    } else {
-      final navClassName = getDartClassName(root.realPathName);
-      genBuffer.write('''
+    final navClassName = getDartClassName(root.realPathName);
+    genBuffer.write('''
     class $className {
-      $className._(){
-        _init();
-      }
+      $className._();
 
       static $className? _instance;
       
-      factory $className({bool newInstance = false}) {
+      factory $className({
+        bool newInstance = false,
+        Map<String, dynamic> params = const {},
+        Map<String, dynamic>? extra,
+        Object? groupId,
+      }) {
         if(!newInstance && _instance != null) {
           return _instance!;
         }
-        return _instance = $className._();
+        return _instance = $className._().._init(params, extra, groupId);
       }
 
-      void _init() {
+      void _init(
+        Map<String, dynamic> params,
+        Map<String, dynamic>? extra,
+        Object? groupId,
+      ) {
         $buffer
       }
       $memberBuffer
+      ${root.isSameClass ? bufferNav : ''}
     }
   ''');
+    if (!root.isSameClass) {
       genBuffer.write('''
     class $navClassName {
       $navClassName._();
@@ -324,7 +327,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       /// see: [NPage.newGroupKey] and [NPage.resolveGroupId]''';
     }
 
-    var prKey = 'static $nPage get $memberName => $className()._$memberName;';
+    var prKey = 'static $nPage get $memberName => _instance!._$memberName;';
 
     memberBuffer.write('''
             late final $nPage _$memberName;
@@ -347,11 +350,17 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     final pathName =
         pathNames.isEmpty ? routeName : '$routeName/:${pathNames.join('/:')}';
+    var redirectFn = fnName(base.redirectFn) ?? '';
+    if (redirectFn.isNotEmpty) {
+      redirectFn = 'redirectBuilder: $redirectFn,';
+    }
+
     routes.write('''
      _$memberName = $nPage(
         $buf
         $childrenBuffer
         path: '$pathName',
+        $redirectFn
         pageBuilder: (entry) => $pageBuilder,
       );
 
@@ -404,9 +413,13 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         groupList!.map((e) => e.toTypeValue()!.element!).toSet();
 
     final reg = value.getField('classToNameReg')?.toStringValue() ?? '';
+    final restorationId = value.getField('restorationId')?.toStringValue();
+    final redirectFn = value.getField('redirectFn')?.toFunctionValue();
     final element = NopMainElement(
       className: className!,
+      restoratoinId: restorationId,
       classToNameReg: reg,
+      redirectFn: redirectFn,
       name: rootName!,
       pages: items,
       main: main?.element,
@@ -532,6 +545,7 @@ class ParamNote {
 class NopMainElement with Base {
   NopMainElement({
     this.className = '',
+    this.restoratoinId,
     this.classToNameReg = '',
     this.routerName = 'router',
     this.name = '',
@@ -543,6 +557,7 @@ class NopMainElement with Base {
     this.pageBuilderElement,
     this.groupList = const {},
     this.pageBuilderName,
+    this.redirectFn,
   });
   final String className;
   @override
@@ -557,6 +572,7 @@ class NopMainElement with Base {
   final bool genKey;
   final String navClassName;
   final String routerName;
+  final String? restoratoinId;
 
   bool get isSameClass => realPathName == realClassName;
 
@@ -594,6 +610,8 @@ class NopMainElement with Base {
   final Set<Element> groupList;
   @override
   final String? pageBuilderName;
+  @override
+  ExecutableElement? redirectFn;
 }
 
 class RouteItemElement with Base {
@@ -644,6 +662,8 @@ mixin Base {
   Base? get parent;
   ClassElement? get classElement => page as ClassElement?;
   bool get isRoot => false;
+
+  ExecutableElement? get redirectFn => null;
   // String get fullName {
   //   if (isRoot || parent == null) return '';
   //   return '${parent!.fullName}/$realName';
