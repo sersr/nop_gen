@@ -93,7 +93,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
       static $className? _instance;
       
-      factory $className({
+       static $className init({
         bool newInstance = false,
         Map<String, dynamic> params = const {},
         Map<String, dynamic>? extra,
@@ -454,6 +454,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     final groupListElement =
         groupList!.map((e) => e.toTypeValue()!.element!).toSet();
     final reg = value.getField('classToNameReg')?.toStringValue();
+    final redirectFn = value.getField('redirectFn')?.toFunctionValue();
 
     final element = RouteItemElement(
       page: page?.element,
@@ -461,6 +462,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       pageBuilderElement: pagev,
       name: name!,
       pages: items,
+      redirectFn: redirectFn,
       groupList: groupListElement,
       pageBuilderName: genPageBuilder(value),
     );
@@ -611,7 +613,7 @@ class NopMainElement with Base {
   @override
   final String? pageBuilderName;
   @override
-  ExecutableElement? redirectFn;
+  final ExecutableElement? redirectFn;
 }
 
 class RouteItemElement with Base {
@@ -623,7 +625,8 @@ class RouteItemElement with Base {
     this.pages = const [],
     this.groupList = const {},
     this.pageBuilderName,
-  });
+    ExecutableElement? redirectFn,
+  }) : _redirectFn = redirectFn;
   @override
   final String name;
 
@@ -652,6 +655,13 @@ class RouteItemElement with Base {
   final Set<Element> groupList;
   @override
   final String? pageBuilderName;
+
+  final ExecutableElement? _redirectFn;
+
+  @override
+  ExecutableElement? get redirectFn {
+    return _redirectFn ?? parent?.redirectFn;
+  }
 }
 
 mixin Base {
