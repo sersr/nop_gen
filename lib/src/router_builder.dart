@@ -345,7 +345,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       pageBuilder = '${base.pageBuilderName}(entry, $constPrefix $nopWidget)';
     } else {
       pageBuilder =
-          'MaterialIgnorePage(key: entry.pageKey, child:$constPrefix $nopWidget)';
+          'MaterialIgnorePage(key: entry.pageKey,restorationId: entry.restorationId, child:$constPrefix $nopWidget)';
     }
 
     final pathName =
