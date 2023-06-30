@@ -80,6 +80,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       params :params,
       extra: extra,
       groupId: groupId,
+      observers: observers,
      );
 ''');
 
@@ -98,17 +99,19 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         Map<String, dynamic> params = const {},
         Map<String, dynamic>? extra,
         Object? groupId,
+         List<NavigatorObserver> observers = const [],
       }) {
         if(!newInstance && _instance != null) {
           return _instance!;
         }
-        return _instance = $className._().._init(params, extra, groupId);
+        return _instance = $className._().._init(params, extra, groupId, observers);
       }
 
       void _init(
         Map<String, dynamic> params,
         Map<String, dynamic>? extra,
         Object? groupId,
+        List<NavigatorObserver> observers,
       ) {
         $buffer
       }
@@ -125,6 +128,12 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   ''');
     }
     return genBuffer.toString();
+  }
+
+  ExecutableElement? getJosnFunction(Element? element) {
+    if (element is! ClassElement) return null;
+    return element.getMethod('fromJson') ??
+        element.getNamedConstructor('fromJson');
   }
 
   void genRoute(
@@ -180,10 +189,13 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     final parametersNamedQueryArgs = <String>[];
     final pathNames = <String>[];
 
+    final jsonKey = StringBuffer();
+
     for (var item in element.parameters) {
       if (!mainElement.genKey && item.name == 'key') {
         continue;
       }
+
       final paramNote = getParamNote<Param>(item.metadata);
       var paramFrom = paramNote.isQuery ? 'entry.queryParams' : 'entry.params';
       final itemName = paramNote.getName(item.name);
@@ -200,18 +212,45 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         parametersNamedArgs.add("'$itemName': $itemName");
       }
 
+      var extra = StringBuffer('');
+      if (!item.type.isDartCoreString) {
+        final type = item.type.getDisplayString(withNullability: false);
+        extra.write('if ($itemName is! $type?) {');
+        var writed = false;
+        if (!item.type.isDartCoreType) {
+          final typeElement = item.type.element;
+          final jsonFn = paramNote.fromJson ?? getJosnFunction(typeElement);
+          if (jsonFn != null) {
+            final fnCall = fnName(jsonFn);
+            extra.write('$itemName = $fnCall($itemName);');
+            writed = true;
+          }
+        }
+        if (!writed) {
+          extra.write('$itemName = jsonDecode($itemName);');
+        }
+        extra.write('}');
+        // if (item.hasDefaultValue) {
+        //   extra.write('$itemName ??= ${item.defaultValueCode};');
+        // }
+      }
+
+      jsonKey.write("var $itemName = $paramFrom['$itemName'];$extra");
       if (item.isOptionalPositional) {
         parametersPosOrNamed.add(fot);
-        parametersNamedUsed.add('$paramFrom[\'$itemName\']');
+        parametersNamedUsed.add(itemName);
+        // parametersNamedUsed.add('$paramFrom[\'$itemName\']');
         continue;
       } else if (item.isNamed) {
-        parametersNamedUsed.add('${item.name}: $paramFrom[\'$itemName\']');
+        parametersNamedUsed.add("${item.name}: $itemName");
+        // parametersNamedUsed.add('${item.name}: $paramFrom[\'$itemName\']');
         // parametersNamedArgs.add("'$itemName': $itemName");
         parametersPosOrNamed.add(fot);
         continue;
       }
+      parametersNamedUsed.add(itemName);
       // parametersNamedArgs.add("'$itemName': $itemName");
-      parameters.add('$paramFrom[\'$itemName\']');
+      // parameters.add('$paramFrom[\'$itemName\']');
       parametersPosOrNamed.add('required ${item.type} $itemName$defaultValue');
     }
     final buffer = StringBuffer();
@@ -339,7 +378,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         $listBuffer
         $builderBuffer
         child: $baseChild,
-        )''';
+        ),''';
 
     if (base.pageBuilderName != null) {
       pageBuilder = '${base.pageBuilderName}(entry, $constPrefix $nopWidget)';
@@ -361,7 +400,10 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         $childrenBuffer
         path: '$pathName',
         $redirectFn
-        pageBuilder: (entry) => $pageBuilder,
+        pageBuilder: (entry)  {
+          $jsonKey
+          return $pageBuilder;
+        },
       );
 
       ''');
@@ -523,18 +565,20 @@ ParamNote getParamNote<T>(List<ElementAnnotation> list) {
     if (isSameType<T>(metaName)) {
       final name = meta!.getField('name')?.toStringValue();
       final isQuery = meta.getField('isQuery')?.toBoolValue();
+      final fromJson = meta.getField('fromJson')?.toFunctionValue();
       if (name != null && isQuery != null) {
-        return ParamNote(name, isQuery);
+        return ParamNote(name, isQuery, fromJson);
       }
     }
   }
-  return ParamNote('', true);
+  return ParamNote('', true, null);
 }
 
 class ParamNote {
-  ParamNote(this.name, this.isQuery);
+  ParamNote(this.name, this.isQuery, this.fromJson);
   final String name;
   final bool isQuery;
+  final ExecutableElement? fromJson;
 
   String getName(String baseName) {
     if (name.isEmpty) {
