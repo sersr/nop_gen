@@ -767,7 +767,7 @@ mixin Base {
     if (name != null && name.isNotEmpty && classToNameReg.isNotEmpty) {
       return name.replaceAll(RegExp(classToNameReg), '');
     }
-    return null;
+    return name;
   }
 
   /// 真实类名，不可改变
