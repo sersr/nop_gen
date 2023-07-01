@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:analyzer/dart/constant/value.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:nop_annotations/nop_annotations.dart';
 import 'package:source_gen/source_gen.dart';
@@ -60,6 +61,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     final buffer = StringBuffer();
     final bufferNav = StringBuffer();
     final memberBuffer = StringBuffer();
+    final regFnBuffer = <String, String>{};
 
     var name = root.realClassName;
     final className = getDartClassName(name);
@@ -71,8 +73,12 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     late final NRouter _${root.realRouterName};
     static NRouter get ${root.realRouterName} => _instance!._${root.realRouterName};
     ''');
-    genRoute(root, name, builders, buffer, memberBuffer, bufferNav);
-
+    genRoute(
+        root, name, builders, buffer, memberBuffer, bufferNav, regFnBuffer);
+    for (var entry in regFnBuffer.entries) {
+      buffer.write(
+          'NRouterJsonTransfrom.putToJsonFn<${entry.key}>(${entry.value});');
+    }
     buffer.write('''
    _${root.realRouterName} = NRouter(
       rootPage: _$rootName,
@@ -130,10 +136,23 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     return genBuffer.toString();
   }
 
-  ExecutableElement? getJosnFunction(Element? element) {
+  ExecutableElement? getFromJsonFn(Element? element) {
     if (element is! ClassElement) return null;
     return element.getMethod('fromJson') ??
         element.getNamedConstructor('fromJson');
+  }
+
+  ExecutableElement? getToJsonFn(Element? element, {String? name}) {
+    if (element is! ClassElement) return null;
+    return element.getMethod(name ?? 'toJson');
+  }
+
+  bool hasSuperType(Element? element, String name) {
+    if (element is! ClassElement) return false;
+    for (var parent in element.interfaces) {
+      return parent.element.displayName == name;
+    }
+    return false;
   }
 
   void genRoute(
@@ -142,7 +161,8 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     List<RouteBuilderItemElement> builders,
     StringBuffer routes,
     StringBuffer memberBuffer,
-    StringBuffer routeNav, {
+    StringBuffer routeNav,
+    Map<String, String> regFnBuffer, {
     String currentPath = '',
   }) {
     var mainClassName = base.classCallName();
@@ -164,6 +184,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     }
     for (var page in base.pages) {
       genRoute(page, className, builders, routes, memberBuffer, routeNav,
+          regFnBuffer,
           currentPath: fullName);
     }
 
@@ -212,27 +233,37 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         parametersNamedArgs.add("'$itemName': $itemName");
       }
 
-      var extra = StringBuffer('');
+      var extra = StringBuffer();
       if (!item.type.isDartCoreString) {
         final type = item.type.getDisplayString(withNullability: false);
         extra.write('if ($itemName is! $type?) {');
-        var writed = false;
-        if (!item.type.isDartCoreType) {
+        var wrote = false;
+        if (!item.type.isDartType) {
           final typeElement = item.type.element;
-          final jsonFn = paramNote.fromJson ?? getJosnFunction(typeElement);
+          final jsonFn = paramNote.fromJson ?? getFromJsonFn(typeElement);
           if (jsonFn != null) {
             final fnCall = fnName(jsonFn);
             extra.write('$itemName = $fnCall($itemName);');
-            writed = true;
+            wrote = true;
+          }
+          final isExtendNRouterJsonTransfrom =
+              hasSuperType(typeElement, 'NRouterJsonTransfrom');
+          if (!isExtendNRouterJsonTransfrom) {
+            final toJson = getToJsonFn(typeElement, name: paramNote.toJsonName);
+            var toJsonValue = 'null';
+            if (toJson != null && toJson.isStatic) {
+              toJsonValue = toJson.getDisplayString(withNullability: false);
+            }
+            final itemType = typeElement?.displayName;
+            if (itemType != null) {
+              regFnBuffer.putIfAbsent(itemType, () => '($toJsonValue,)');
+            }
           }
         }
-        if (!writed) {
-          extra.write('$itemName = jsonDecode($itemName);');
+        if (!wrote) {
+          extra.write('$itemName = jsonDecodeCustom($itemName);');
         }
         extra.write('}');
-        // if (item.hasDefaultValue) {
-        //   extra.write('$itemName ??= ${item.defaultValueCode};');
-        // }
       }
 
       jsonKey.write("var $itemName = $paramFrom['$itemName'];$extra");
@@ -384,7 +415,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       pageBuilder = '${base.pageBuilderName}(entry, $constPrefix $nopWidget)';
     } else {
       pageBuilder =
-          'MaterialIgnorePage(key: entry.pageKey,restorationId: entry.restorationId, child:$constPrefix $nopWidget)';
+          'MaterialIgnorePage(key: entry.pageKey,entry: entry, child:$constPrefix $nopWidget)';
     }
 
     final pathName =
@@ -566,19 +597,24 @@ ParamNote getParamNote<T>(List<ElementAnnotation> list) {
       final name = meta!.getField('name')?.toStringValue();
       final isQuery = meta.getField('isQuery')?.toBoolValue();
       final fromJson = meta.getField('fromJson')?.toFunctionValue();
+      final toJson = meta.getField('toJson')?.toFunctionValue();
+      final toJsonName = meta.getField('toJsonName')?.toStringValue();
       if (name != null && isQuery != null) {
-        return ParamNote(name, isQuery, fromJson);
+        return ParamNote(name, isQuery, fromJson, toJson, toJsonName);
       }
     }
   }
-  return ParamNote('', true, null);
+  return ParamNote('', true, null, null, null);
 }
 
 class ParamNote {
-  ParamNote(this.name, this.isQuery, this.fromJson);
+  ParamNote(
+      this.name, this.isQuery, this.fromJson, this.toJson, this.toJsonName);
   final String name;
   final bool isQuery;
   final ExecutableElement? fromJson;
+  final ExecutableElement? toJson;
+  final String? toJsonName;
 
   String getName(String baseName) {
     if (name.isEmpty) {
@@ -844,3 +880,17 @@ class RouteBuilderItemElement {
 
 Builder routerMainBuilder(BuilderOptions options) =>
     SharedPartBuilder([RouterGenerator()], 'router');
+
+extension on DartType {
+  bool get isDartType {
+    return isDartCoreBool ||
+        isDartCoreInt ||
+        isDartCoreDouble ||
+        isDartCoreNum ||
+        isDartCoreString ||
+        isDartCoreSet ||
+        isDartCoreList ||
+        isDartCoreIterable ||
+        isDartCoreMap;
+  }
+}
