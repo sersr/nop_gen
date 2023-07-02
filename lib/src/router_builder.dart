@@ -137,18 +137,18 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   }
 
   ExecutableElement? getFromJsonFn(Element? element) {
-    if (element is! ClassElement) return null;
+    if (element is! InterfaceElement) return null;
     return element.getMethod('fromJson') ??
         element.getNamedConstructor('fromJson');
   }
 
   ExecutableElement? getToJsonFn(Element? element, {String? name}) {
-    if (element is! ClassElement) return null;
+    if (element is! InterfaceElement) return null;
     return element.getMethod(name ?? 'toJson');
   }
 
   bool hasSuperType(Element? element, String name) {
-    if (element is! ClassElement) return false;
+    if (element is! InterfaceElement) return false;
     for (var parent in element.interfaces) {
       return parent.element.displayName == name;
     }
@@ -241,21 +241,24 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         if (!item.type.isDartType) {
           final typeElement = item.type.element;
           final jsonFn = paramNote.fromJson ?? getFromJsonFn(typeElement);
+          final itemType = typeElement?.displayName;
+          final isEnum = typeElement is EnumElement;
           if (jsonFn != null) {
             final fnCall = fnName(jsonFn);
             extra.write('$itemName = $fnCall($itemName);');
             wrote = true;
+          } else if (isEnum) {
+            extra.write('$itemName = $itemType.values[$itemName];');
+            wrote = true;
           }
-          final isExtendNRouterJsonTransfrom =
-              hasSuperType(typeElement, 'NRouterJsonTransfrom');
-          if (!isExtendNRouterJsonTransfrom) {
+          final hasToJsonFn = hasSuperType(typeElement, 'NRouterJsonTransfrom');
+          if (!hasToJsonFn) {
             final toJson = getToJsonFn(typeElement, name: paramNote.toJsonName);
             var toJsonValue = 'null';
             if (toJson != null && toJson.isStatic) {
               toJsonValue = toJson.getDisplayString(withNullability: false);
             }
-            final itemType = typeElement?.displayName;
-            if (itemType != null) {
+            if (itemType != null && !isEnum) {
               regFnBuffer.putIfAbsent(itemType, () => '($toJsonValue,)');
             }
           }
@@ -569,8 +572,8 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
 String? fnName(ExecutableElement? fn, {bool dot = true, String reg = ''}) {
   if (fn != null) {
-    if (fn is ClassMemberElement) {
-      final cls = fn.enclosingElement as ClassElement;
+    if (fn.enclosingElement is InterfaceElement) {
+      final cls = fn.enclosingElement as InterfaceElement;
       var name = cls.name;
       if (reg.isNotEmpty) {
         name = name.replaceAll(RegExp(reg), '');
