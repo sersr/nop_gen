@@ -110,7 +110,9 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         if(!newInstance && _instance != null) {
           return _instance!;
         }
-        return _instance = $className._().._init(params, extra, groupId, observers);
+        final instance = _instance = $className._();
+        instance._init(params, extra, groupId, observers);
+        return instance;
       }
 
       void _init(
