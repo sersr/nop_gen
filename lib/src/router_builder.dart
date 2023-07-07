@@ -366,11 +366,17 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     }
 
     var memberName = name;
+    final buf = StringBuffer();
     var nPage = base.isRoot ? 'NPageMain' : 'NPage';
+    if (base is NopMainElement) {
+      final name = fnName(base.errorBuilderElement);
+      if (name != null) {
+        buf.write('errorPageBuilder: $name,');
+      }
+    }
     if (!base.isRoot && mainElement.private) {
       memberName = '_$name';
     }
-    final buf = StringBuffer();
     var seeGroupKey = '';
     // final contextBuffer = StringBuffer();
 
@@ -493,6 +499,9 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     final reg = value.getField('classToNameReg')?.toStringValue() ?? '';
     final restorationId = value.getField('restorationId')?.toStringValue();
     final redirectFn = value.getField('redirectFn')?.toFunctionValue();
+    final errorBuilderElement =
+        value.getField('errorBuilder')?.toFunctionValue();
+
     final element = NopMainElement(
       className: className!,
       restoratoinId: restorationId,
@@ -507,6 +516,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       genKey: genKey!,
       navClassName: navClassName!,
       pageBuilderName: genPageBuilder(value),
+      errorBuilderElement: errorBuilderElement,
     );
     for (var item in items) {
       item.parent = element;
@@ -645,6 +655,7 @@ class NopMainElement with Base {
     this.groupList = const {},
     this.pageBuilderName,
     this.redirectFn,
+    this.errorBuilderElement,
   });
   final String className;
   @override
@@ -692,6 +703,7 @@ class NopMainElement with Base {
   Element? get page => main;
   @override
   final ExecutableElement? pageBuilderElement;
+  final ExecutableElement? errorBuilderElement;
 
   @override
   final Set<Element> groupList;
