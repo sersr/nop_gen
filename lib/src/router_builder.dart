@@ -388,15 +388,8 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         owner = '_$owner';
       }
 
-      // final isCurrent = base == first;
-      // final groupOwner = '() => _$owner';
       final groupKey = base.groupKey;
-      final groupOwner = first == base ? 'true' : '() => $owner';
-      // groupOwnerLate:  $groupOwner,
-      // groupKey: '$groupKey',
-      buf.write('''
-            groupOwner: $groupOwner,
-          ''');
+      buf.write('useGroupId: true,');
 
       parametersPosOrNamed.add('required $groupKey');
       // parametersNamedArgs.add("'$groupKey': $groupKey");
