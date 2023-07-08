@@ -398,7 +398,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       constPrefix = '';
       seeGroupKey = '''
       /// [$groupKey]
-      /// see: [NPage.newGroupKey] and [NPage.resolveGroupId]''';
+      /// see: [NPage.newGroupKey]''';
     }
 
     var prKey = 'static $nPage get $memberName => _instance!._$memberName;';
