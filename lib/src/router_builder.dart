@@ -345,12 +345,13 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     var groupParam = '';
     if (methods.isNotEmpty) {
-      final builds = methods.map((e) => '$targetClassName.${e.name}').toList();
-      if (pageConst) {
-        builderBuffer.write('''builders: $builds,''');
-      } else {
-        builderBuffer.write('''builders: const $builds,''');
-      }
+      final builder = fnName(methods.first);
+      builderBuffer.write('$builder');
+      // if (pageConst) {
+      //   builderBuffer.write('''builders: $builds,''');
+      // } else {
+      //   builderBuffer.write('''builders: const $builds,''');
+      // }
     }
 
     var children = base.pages.map((e) {
@@ -394,7 +395,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       parametersPosOrNamed.add('required $groupKey');
       // parametersNamedArgs.add("'$groupKey': $groupKey");
       groupParam = ', groupId: $groupKey';
-      builderBuffer.write('group: entry.groupId,');
+      // builderBuffer.write('group: entry.groupId,');
       constPrefix = '';
       seeGroupKey = '''
       /// [$groupKey]
@@ -409,17 +410,23 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
           ''');
 
     var pageBuilder = '';
-    final nopWidget = ''' Nop.page(
-        $listBuffer
-        $builderBuffer
-        child: $baseChild,
-        ),''';
+    // final nopWidget = ''' Nop.page(
+    //     $listBuffer
+    //     $builderBuffer
+    //     child: $baseChild,
+    //     ),''';
 
+    if (builderBuffer.isNotEmpty) {
+      builderBuffer.write('($baseChild)');
+    } else {
+      builderBuffer.write(baseChild);
+    }
     if (base.pageBuilderName != null) {
-      pageBuilder = '${base.pageBuilderName}(entry, $constPrefix $nopWidget)';
+      pageBuilder =
+          '${base.pageBuilderName}(entry, $constPrefix $builderBuffer)';
     } else {
       pageBuilder =
-          'MaterialIgnorePage(key: entry.pageKey,entry: entry, child:$constPrefix $nopWidget)';
+          'MaterialIgnorePage(key: entry.pageKey,entry: entry, child:$constPrefix $builderBuffer)';
     }
 
     final pathName =
@@ -433,6 +440,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
      _$memberName = $nPage(
         $buf
         $childrenBuffer
+        $listBuffer
         path: '$pathName',
         $redirectFn
         pageBuilder: (entry)  {
