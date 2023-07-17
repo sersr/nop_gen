@@ -87,6 +87,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       extra: extra,
       groupId: groupId,
       observers: observers,
+      updateLocation: updateLocation,
      );
 ''');
 
@@ -105,13 +106,14 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         Map<String, dynamic> params = const {},
         Map<String, dynamic>? extra,
         Object? groupId,
-         List<NavigatorObserver> observers = const [],
+        bool updateLocation = false,
+        List<NavigatorObserver> observers = const [],
       }) {
         if(!newInstance && _instance != null) {
           return _instance!;
         }
         final instance = _instance = $className._();
-        instance._init(params, extra, groupId, observers);
+        instance._init(params, extra, groupId, observers, updateLocation);
         return instance;
       }
 
@@ -120,6 +122,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         Map<String, dynamic>? extra,
         Object? groupId,
         List<NavigatorObserver> observers,
+        bool updateLocation,
       ) {
         $buffer
       }
