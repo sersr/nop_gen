@@ -193,18 +193,9 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
           currentPath: fullName);
     }
 
-    FunctionTypedElement? element;
-    var isConst = false;
-    if (base.pageBuilderElement != null) {
-      element = base.pageBuilderElement!;
-    } else {
-      for (var constructor in base.classElement!.constructors) {
-        if (constructor.name.isEmpty) {
-          element = constructor;
-          isConst = constructor.isConst;
-        }
-      }
-    }
+    FunctionTypedElement? element = base.getBuildFn();
+    final isConstFn = element is ConstructorElement && element.isConst;
+
     if (element == null) return;
 
     final parameters = <String>[];
@@ -223,8 +214,8 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       }
 
       final paramNote = getParamNote<Param>(item.metadata);
-      var paramFrom = paramNote.isQuery ? 'entry.queryParams' : 'entry.params';
       final itemName = paramNote.getName(item.name);
+      var paramFrom = paramNote.isQuery ? 'entry.queryParams' : 'entry.params';
 
       final requiredValue =
           item.isRequiredNamed && !item.hasDefaultValue ? 'required ' : '';
@@ -312,35 +303,17 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     final listBuffer = StringBuffer();
 
-    final pageConst = buffer.isEmpty && isConst && base.allgroupList.isEmpty;
-    var constPre = pageConst ? '' : 'const ';
+    // functioin call
+    final isConstPage = buffer.isEmpty && isConstFn;
 
-    /// removed
-    // if (base.list.isNotEmpty) {
-    //   listBuffer.write('''
-    //     list: $constPre ${base.listList},
-    //   ''');
-    // }
     if (base.allgroupList.isNotEmpty) {
       listBuffer.write('''
-            groupList: $constPre ${base.allgroupList.map((e) => e.name!).toList()},
+            groupList: const ${base.allgroupList.map((e) => e.name!).toList()},
           ''');
     }
-    // if (haslist) {
-    //   listBuffer.write('preRun: (list) {');
-    // }
-    // for (var item in base.groupList) {
-    //   listBuffer.write('list<${item.name}>(shared: false);');
-    // }
-    // for (var item in base.list) {
-    //   listBuffer.write('list<${item.name}>();');
-    // }
-    // if (listBuffer.isNotEmpty) {
-    //   listBuffer.write('},');
-    // }
 
     var constPrefix = '';
-    if (pageConst) {
+    if (isConstPage) {
       constPrefix = 'const';
     }
 
@@ -350,11 +323,6 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     if (methods.isNotEmpty) {
       final builder = fnName(methods.first);
       builderBuffer.write('$builder');
-      // if (pageConst) {
-      //   builderBuffer.write('''builders: $builds,''');
-      // } else {
-      //   builderBuffer.write('''builders: const $builds,''');
-      // }
     }
 
     var children = base.pages.map((e) {
@@ -381,29 +349,28 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     if (!base.isRoot && mainElement.private) {
       memberName = '_$name';
     }
-    var seeGroupKey = '';
-    // final contextBuffer = StringBuffer();
+
+    final first = base.firstUnique;
+
+    var owner = getDartMemberName(first.realMemName(dot: false));
+    if (!base.isRoot && mainElement.private) {
+      owner = '_$owner';
+    }
+
+    final groupKey = base.groupKey;
 
     if (base.allgroupList.isNotEmpty) {
-      final first = base.firstUnique;
-
-      var owner = getDartMemberName(first.realMemName(dot: false));
-      if (!base.isRoot && mainElement.private) {
-        owner = '_$owner';
-      }
-
-      final groupKey = base.groupKey;
       buf.write('useGroupId: true,');
-
       parametersPosOrNamed.add('required $groupKey');
-      // parametersNamedArgs.add("'$groupKey': $groupKey");
-      groupParam = ', groupId: $groupKey';
-      // builderBuffer.write('group: entry.groupId,');
-      constPrefix = '';
-      seeGroupKey = '''
-      /// [$groupKey]
-      /// see: [NPage.newGroupKey]''';
+    } else {
+      parametersPosOrNamed.add('$groupKey');
     }
+
+    groupParam = ', groupId: $groupKey';
+
+    final seeGroupKey = '''
+      ${base.paramDoc}/// [$groupKey]
+      /// see: [NPage.newGroupKey]''';
 
     var prKey = 'static $nPage get $memberName => _instance!._$memberName;';
 
@@ -413,11 +380,6 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
           ''');
 
     var pageBuilder = '';
-    // final nopWidget = ''' Nop.page(
-    //     $listBuffer
-    //     $builderBuffer
-    //     child: $baseChild,
-    //     ),''';
 
     if (builderBuffer.isNotEmpty) {
       builderBuffer.write('($baseChild)');
@@ -626,6 +588,17 @@ ParamNote getParamNote<T>(List<ElementAnnotation> list) {
   return ParamNote('', true, null, null, null);
 }
 
+String getMember(ExecutableElement fn, String name) {
+  if (fn.enclosingElement is InterfaceElement) {
+    final cls = fn.enclosingElement as InterfaceElement;
+    final field = cls.getField(name) ?? cls.getGetter(name);
+    if (field != null) {
+      return '${cls.name}.${field.displayName}';
+    }
+  }
+  return '';
+}
+
 class ParamNote {
   ParamNote(
       this.name, this.isQuery, this.fromJson, this.toJson, this.toJsonName);
@@ -826,23 +799,16 @@ mixin Base {
     return elements;
   }
 
-  List<String> get allArgumentNames {
-    final parametersMessage = <String>[];
-    if (pageBuilderElement != null) {
-      for (var item in pageBuilderElement!.parameters) {
-        parametersMessage.add(item.name);
-      }
-    } else {
-      for (var constructor in classElement!.constructors) {
-        if (constructor.name.isEmpty) {
-          for (var item in constructor.parameters) {
-            parametersMessage.add(item.name);
-          }
-          return parametersMessage;
-        }
+  ExecutableElement? getBuildFn() {
+    if (pageBuilderElement != null) return pageBuilderElement;
+
+    for (var constructor in classElement!.constructors) {
+      if (constructor.name.isEmpty) {
+        return constructor;
       }
     }
-    return parametersMessage;
+
+    return null;
   }
 
   String? _groupKey;
@@ -858,31 +824,42 @@ mixin Base {
     return notEmptyParent;
   }
 
-  static Set<String> getChilrenAllNamed(Base base) {
-    final elements = <String>{};
-    elements.addAll(base.allArgumentNames);
-    elements
-        .addAll(base.pages.expand((element) => getChilrenAllNamed(element)));
-    return elements;
-  }
-
+  static const defaultKey = 'groupId';
   String? get groupKey {
     if (_groupKey != null) return _groupKey;
-    return _groupKey = getGroupKey(firstUnique);
-  }
 
-  static const defaultKey = 'groupId';
+    final element = getBuildFn();
+    if (element == null) return null;
 
-  static String? getGroupKey(Base base) {
-    if (base._groupKey != null) return base._groupKey!;
-    final allmethod = getChilrenAllNamed(base);
+    final allnames = element.parameters.map((e) {
+      final paramNote = getParamNote<Param>(e.metadata);
+      return paramNote.getName(e.name);
+    });
+
     var name = defaultKey;
     while (true) {
-      if (!allmethod.contains(name)) {
-        return base._groupKey = name;
+      if (!allnames.contains(name)) {
+        return _groupKey = name;
       }
-      name = '$defaultKey${base.id}';
+      name = '$defaultKey$id';
     }
+  }
+
+  String get paramDoc {
+    final element = getBuildFn();
+    if (element == null) return '';
+    final buffer = StringBuffer();
+    for (var item in element.parameters) {
+      final paramNote = getParamNote<Param>(item.metadata);
+      final name = paramNote.getName(item.name);
+
+      if (name != item.name) {
+        final clsField = getMember(element, item.name);
+        buffer.writeln('/// [$name] : [$clsField]');
+      }
+    }
+
+    return buffer.toString();
   }
 
   var _idIndex = 0;
