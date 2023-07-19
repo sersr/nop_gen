@@ -294,7 +294,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
         $buf
         $childrenBuffer
         builder: (context,arguments, group) =>
-        $constPrefix Nop.page(
+        $constPrefix Nop(
         $listBuffer
         $builderBuffer
         child: $baseChild,
