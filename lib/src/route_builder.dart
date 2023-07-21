@@ -44,7 +44,6 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
               }
             }
           }
-          targetClassName = element.name;
           mainElement = root;
           return generator(root, map.values.toList());
         }
@@ -52,7 +51,6 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     }
   }
 
-  late String targetClassName;
   late NopMainElement mainElement;
 
   String generator(
@@ -222,8 +220,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
 
         final builderBuffer = StringBuffer();
         if (methods.isNotEmpty) {
-          final builds =
-              methods.map((e) => '$targetClassName.${e.name}').toList();
+          final builds = methods.map((e) => fnName(e)).toList();
           if (pageConst) {
             builderBuffer.write('''builders: $builds,''');
           } else {
@@ -258,7 +255,6 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
             owner = '_$owner';
           }
 
-          // final isCurrent = base == first;
           final groupOwner = '() => _$owner';
           final groupKey = base.groupKey;
           buf.write('''
@@ -269,8 +265,15 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           parametersPosOrNamed.add('required $groupKey /* bool or String */');
           parametersNamedArgs.add("'$groupKey': $groupKey");
           builderBuffer.write('group: group,');
-          // contextBuffer.write('$groupKey ??= NopRoute.getGroupIdFromBuildContext(context);');
-          // constPrefix = '';
+
+          baseChild = '''
+        Nop.page(
+        $listBuffer
+        $builderBuffer
+        child: $baseChild,
+        ), 
+  ''';
+        } else if (builderBuffer.isNotEmpty) {
           baseChild = '''
         Nop(
         $listBuffer
