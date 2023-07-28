@@ -1,7 +1,6 @@
 # nop_gen
 
- [nop](https://pub.dev/packages/nop) 的代码生成包
+[nop](https://pub.dev/packages/nop)  
+[flutter_nop](https://pub.dev/packages/flutter_nop)
 
-  使用方法：
-  在项目根目录下：`flutter pub run build_runner build`
-  
+    dart run build_runner build --delete-conflicting-outputs
