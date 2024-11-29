@@ -23,7 +23,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     if (element is ClassElement) {
       for (var metaElement in element.metadata) {
         final meta = metaElement.computeConstantValue();
-        final metaName = meta?.type?.getDisplayString(withNullability: false);
+        final metaName = meta?.type?.element?.name;
         if (isSameType<NopRouteMain>(metaName)) {
           final root = gen(meta!);
           final staticMethds = element.methods.where((e) => e.isStatic);
@@ -31,8 +31,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           for (var item in staticMethds) {
             for (var metaElement in item.metadata) {
               final meta = metaElement.computeConstantValue();
-              final metaName =
-                  meta?.type?.getDisplayString(withNullability: false);
+              final metaName = meta?.type?.element?.name;
               if (isSameType<RouteBuilderItem>(metaName)) {
                 final part = genBuildElement(meta!, item);
                 final value = map[item];
@@ -354,7 +353,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
   }
 
   RouteItemElement genItemElement(DartObject value) {
-    final metaName = value.type?.getDisplayString(withNullability: false);
+    final metaName = value.type?.element?.name;
     assert(isSameType<RouteItem>(metaName));
     final name = value.getField('name')?.toStringValue();
     final page = value.getField('page')?.toTypeValue();

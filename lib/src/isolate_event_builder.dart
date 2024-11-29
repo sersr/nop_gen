@@ -83,8 +83,7 @@ class Methods {
 
       if (itemElement is ClassElement) {
         useSameReturnType = itemElement.allSupertypes.any((element) => element
-            .getDisplayString(withNullability: false)
-            .contains(currentItem));
+            .element.name.contains(currentItem));
       }
       name = useSameReturnType
           ? returnType.toString()
@@ -600,8 +599,7 @@ class ServerEventGeneratorForAnnotation
 
   ClassItem? genSuperType(InterfaceElement element) {
     if (element.supertype != null &&
-        element.supertype!.getDisplayString(withNullability: false) !=
-            'Object') {
+        element.supertype!.element.name != 'Object') {
       return gen(element.supertype!.element);
     }
     return null;
@@ -614,7 +612,7 @@ class ServerEventGeneratorForAnnotation
     bool generate = true;
     element.metadata.any((e) {
       final meta = e.computeConstantValue();
-      final type = meta?.type?.getDisplayString(withNullability: false);
+      final type = meta?.type?.element?.name;
       if (isSameType<NopServerEventItem>(type)) {
         final messageName = meta?.getField('messageName')?.toStringValue();
         final separate = meta?.getField('separate')?.toBoolValue();
@@ -739,7 +737,7 @@ class ServerEventGeneratorForAnnotation
 
       methodElement.metadata.any((element) {
         final data = element.computeConstantValue();
-        final type = data?.type?.getDisplayString(withNullability: false);
+        final type = data?.type?.element?.name;
         if (type == 'NopServerMethod') {
           final isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
           final useTransferType =

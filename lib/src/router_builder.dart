@@ -23,7 +23,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
       Element element, ConstantReader annotation, BuildStep buildStep) {
     for (var metaElement in element.metadata) {
       final meta = metaElement.computeConstantValue();
-      final metaName = meta?.type?.getDisplayString(withNullability: false);
+      final metaName = meta?.type?.element?.name;
       if (isSameType<RouterMain>(metaName)) {
         final root = gen(meta!);
         if (element is ClassElement) {
@@ -32,8 +32,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
           for (var item in staticMethds) {
             for (var metaElement in item.metadata) {
               final meta = metaElement.computeConstantValue();
-              final metaName =
-                  meta?.type?.getDisplayString(withNullability: false);
+              final metaName = meta?.type?.element?.name;
               if (isSameType<RouteBuilderItem>(metaName)) {
                 final part = genBuildElement(meta!, item);
                 final value = map[item];
@@ -231,7 +230,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
       var extra = StringBuffer();
       if (!item.type.isDartCoreString) {
-        final type = item.type.getDisplayString(withNullability: false);
+        final type = item.type.element?.name;
         extra.write('if ($itemName is! $type?) {');
         var wrote = false;
         if (!item.type.isDartType) {
@@ -252,7 +251,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
             final toJson = getToJsonFn(typeElement, name: paramNote.toJsonName);
             var toJsonValue = 'null';
             if (toJson != null && toJson.isStatic) {
-              toJsonValue = toJson.getDisplayString(withNullability: false);
+              toJsonValue = toJson.displayName;
             }
             if (itemType != null && !isEnum) {
               regFnBuffer.putIfAbsent(itemType, () => '($toJsonValue,)');
@@ -496,7 +495,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   }
 
   RouteItemElement genItemElement(DartObject value) {
-    final metaName = value.type?.getDisplayString(withNullability: false);
+    final metaName = value.type?.element?.displayName;
     assert(isSameType<RouterPage>(metaName));
     final name = value.getField('name')?.toStringValue();
     var page = value.getField('page')?.toTypeValue();

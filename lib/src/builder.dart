@@ -51,7 +51,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
       for (final i in element.metadata) {
         final nopDbItem = i.computeConstantValue();
         if (nopDbItem != null) {
-          final nop = nopDbItem.type?.getDisplayString(withNullability: false);
+          final nop = nopDbItem.type?.element?.name;
 
           if (isSameType<NopDb>(nop)) {
             final typetables = nopDbItem.getField('tables')?.toListValue();
@@ -280,7 +280,7 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
       final nopDbItemMeta = i.computeConstantValue();
 
       if (nopDbItemMeta != null) {
-        final typeName = nopDbItemMeta.type?.getDisplayString(withNullability: false);
+        final typeName = nopDbItemMeta.type?.element?.name;
         if (isSameType<NopDbItem>(typeName)) {
           final name = nopDbItemMeta.getField('name')?.toStringValue();
 
@@ -289,14 +289,14 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
           if (addPrimaryKey != null && name != null) {
             info._isPrimaryKey = addPrimaryKey;
             info.nameDb = name.isEmpty ? e.name : name;
-            info.type = type?.getDisplayString(withNullability: false);
+            info.type = type?.element?.name;
             break;
           }
         }
       }
     }
     info.nameDb ??= e.name;
-    final type = e.type.getDisplayString(withNullability: false);
+    final type = e.type.element?.name;
     if (info.type != null) {
       info.typeJson = type;
     }

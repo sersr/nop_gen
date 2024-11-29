@@ -32,7 +32,7 @@ String? fnName(ExecutableElement? fn, {bool dot = true, String reg = ''}) {
 ParamNote getParamNote(List<ElementAnnotation> list) {
   for (var item in list) {
     final meta = item.computeConstantValue();
-    final metaName = meta?.type?.getDisplayString(withNullability: false);
+    final metaName = meta?.type?.element?.name;
     if (isSameType<Param>(metaName)) {
       final name = meta!.getField('name')?.toStringValue();
       final isQuery = meta.getField('isQuery')?.toBoolValue();
