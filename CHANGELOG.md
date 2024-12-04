@@ -1,3 +1,6 @@
+# 0.3.1
+* use Element.name
+
 # 0.3.0+1
 
 * add router.
