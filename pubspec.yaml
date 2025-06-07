@@ -1,6 +1,6 @@
 name: nop_gen
 description: route generator for flutter_nop plugin
-version: 0.3.1
+version: 0.3.2
 repository: https://github.com/sersr/nop_gen
 
 environment:
@@ -8,8 +8,8 @@ environment:
 
 dependencies:
   source_gen: ">=1.2.2"
-  analyzer: ">=5.1.0"
-  build: ">=2.3.0"
+  analyzer: "^6.9.0"
+  build:
   nop_annotations: ">=0.3.2"
 
 dev_dependencies:

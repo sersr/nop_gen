@@ -9,8 +9,8 @@ String getTypeString<T>() => T.toString();
 
 String? fnName(ExecutableElement? fn, {bool dot = true, String reg = ''}) {
   if (fn != null) {
-    if (fn.enclosingElement is InterfaceElement) {
-      final cls = fn.enclosingElement as InterfaceElement;
+    if (fn.enclosingElement3 is InterfaceElement) {
+      final cls = fn.enclosingElement3 as InterfaceElement;
       var name = cls.name;
       if (reg.isNotEmpty) {
         name = name.replaceAll(RegExp(reg), '');
