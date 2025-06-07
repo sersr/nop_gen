@@ -48,8 +48,8 @@ ParamNote getParamNote(List<ElementAnnotation> list) {
 }
 
 String getMember(ExecutableElement fn, String name) {
-  if (fn.enclosingElement is InterfaceElement) {
-    final cls = fn.enclosingElement as InterfaceElement;
+  if (fn.enclosingElement3 is InterfaceElement) {
+    final cls = fn.enclosingElement3 as InterfaceElement;
     final field = cls.getField(name) ?? cls.getGetter(name);
     if (field != null) {
       return '${cls.name}.${field.displayName}';

@@ -80,8 +80,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
     }
     buffer.write('''
    _${root.realRouterName} = NRouter(
-      rootPage: _$rootName,
-      $restorationId
+      rootPage: _$rootName,$restorationId
       params :params,
       extra: extra,
       groupId: groupId,
@@ -402,11 +401,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     routes.write('''
      _$memberName = $nPage(
-        $buf
-        $childrenBuffer
-        $listBuffer
-        path: '$pathName',
-        $redirectFn
+        $buf$childrenBuffer${listBuffer}path: '$pathName',$redirectFn
         pageBuilder: (entry)  {
           $jsonKey
           return $pageBuilder;
