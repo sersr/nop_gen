@@ -4,12 +4,12 @@ version: 0.4.0
 repository: https://github.com/sersr/nop_gen
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
-  source_gen: ">=1.2.2"
-  analyzer: ^7.4.5
-  build:
+  source_gen: ^4.2.0
+  analyzer: ^13.3.0
+  build: ^4.0.7
   nop_annotations: ">=0.3.2"
 
 dev_dependencies:

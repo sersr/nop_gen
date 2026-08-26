@@ -48,7 +48,7 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
       final dbName = element.name;
       buffer.write('abstract class _Gen$dbName extends \$Database {\n');
 
-      for (final i in element.metadata) {
+      for (final i in element.metadata.annotations) {
         final nopDbItem = i.computeConstantValue();
         if (nopDbItem != null) {
           final nop = nopDbItem.type?.element?.name;
@@ -71,11 +71,11 @@ class GenNopGeneratorForAnnotation extends GeneratorForAnnotation<NopDb> {
         final e = element?.element;
 
         if (e is ClassElement) {
-          var userTable = e.name;
+          var userTable = e.name ?? '';
           // auto gen
           var genDbName = userTable;
           var databaseTable = 'Gen$genDbName';
-          for (final medata in e.metadata) {
+          for (final medata in e.metadata.annotations) {
             final cs = medata.computeConstantValue();
             final tbName = cs?.getField('tableName')?.toStringValue();
             final table = cs?.getField('name')?.toStringValue();
@@ -276,7 +276,7 @@ List<_ColumnInfo> getCols(List<FieldElement> map) {
     final info = _ColumnInfo();
     info.name = e.name;
 
-    for (var i in e.metadata) {
+    for (var i in e.metadata.annotations) {
       final nopDbItemMeta = i.computeConstantValue();
 
       if (nopDbItemMeta != null) {

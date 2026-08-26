@@ -9,11 +9,11 @@ String getTypeString<T>() => T.toString();
 
 String? fnName(ExecutableElement? fn, {bool dot = true, String reg = ''}) {
   if (fn != null) {
-    if (fn.enclosingElement3 is InterfaceElement) {
-      final cls = fn.enclosingElement3 as InterfaceElement;
+    if (fn.enclosingElement is InterfaceElement) {
+      final cls = fn.enclosingElement as InterfaceElement;
       var name = cls.name;
       if (reg.isNotEmpty) {
-        name = name.replaceAll(RegExp(reg), '');
+        name = name!.replaceAll(RegExp(reg), '');
       }
       if (dot) {
         return '$name.${fn.name}';
@@ -22,7 +22,7 @@ String? fnName(ExecutableElement? fn, {bool dot = true, String reg = ''}) {
       return '${name}_${(fn.name)}';
     }
     if (reg.isNotEmpty) {
-      return fn.name.replaceAll(RegExp(reg), '');
+      return fn.name!.replaceAll(RegExp(reg), '');
     }
     return fn.name;
   }
@@ -48,8 +48,8 @@ ParamNote getParamNote(List<ElementAnnotation> list) {
 }
 
 String getMember(ExecutableElement fn, String name) {
-  if (fn.enclosingElement3 is InterfaceElement) {
-    final cls = fn.enclosingElement3 as InterfaceElement;
+  if (fn.enclosingElement is InterfaceElement) {
+    final cls = fn.enclosingElement as InterfaceElement;
     final field = cls.getField(name) ?? cls.getGetter(name);
     if (field != null) {
       return '${cls.name}.${field.displayName}';

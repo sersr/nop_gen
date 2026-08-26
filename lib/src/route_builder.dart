@@ -21,7 +21,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
   generateForAnnotatedElement(
       Element element, ConstantReader annotation, BuildStep buildStep) {
     if (element is ClassElement) {
-      for (var metaElement in element.metadata) {
+      for (var metaElement in element.metadata.annotations) {
         final meta = metaElement.computeConstantValue();
         final metaName = meta?.type?.element?.name;
         if (isSameType<NopRouteMain>(metaName)) {
@@ -29,7 +29,7 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
           final staticMethds = element.methods.where((e) => e.isStatic);
           final map = <MethodElement, RouteBuilderItemElement>{};
           for (var item in staticMethds) {
-            for (var metaElement in item.metadata) {
+            for (var metaElement in item.metadata.annotations) {
               final meta = metaElement.computeConstantValue();
               final metaName = meta?.type?.element?.name;
               if (isSameType<RouteBuilderItem>(metaName)) {
@@ -138,18 +138,18 @@ class RouteGenerator extends GeneratorForAnnotation<NopRouteMain> {
     }
 
     for (var constructor in classPage.constructors) {
-      if (constructor.name.isEmpty) {
+      if (constructor.name!.isEmpty) {
         final isConst = constructor.isConst;
         final parameters = <String>[];
         final parametersMessage = <String>[];
         final parametersPosOrNamed = <String>[];
         final parametersNamedUsed = <String>[];
         final parametersNamedArgs = <String>[];
-        for (var item in constructor.parameters) {
+        for (var item in constructor.formalParameters) {
           if (!mainElement.genKey && item.name == 'key') {
             continue;
           }
-          parametersMessage.add(item.name);
+          parametersMessage.add(item.name!);
           final requiredValue = item.isRequiredNamed ? 'required ' : '';
           final defaultValue =
               item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
@@ -483,7 +483,7 @@ mixin Base {
 
   String get realName {
     if (name.isEmpty) {
-      return classElement.name;
+      return classElement.name!;
     }
     return name;
   }
@@ -524,9 +524,9 @@ mixin Base {
   List<String> get allArgumentNames {
     final parametersMessage = <String>[];
     for (var constructor in classElement.constructors) {
-      if (constructor.name.isEmpty) {
-        for (var item in constructor.parameters) {
-          parametersMessage.add(item.name);
+      if (constructor.name!.isEmpty) {
+        for (var item in constructor.formalParameters) {
+          parametersMessage.add(item.name!);
         }
         return parametersMessage;
       }

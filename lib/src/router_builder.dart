@@ -21,7 +21,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   @override
   generateForAnnotatedElement(
       Element element, ConstantReader annotation, BuildStep buildStep) {
-    for (var metaElement in element.metadata) {
+    for (var metaElement in element.metadata.annotations) {
       final meta = metaElement.computeConstantValue();
       final metaName = meta?.type?.element?.name;
       if (isSameType<RouterMain>(metaName)) {
@@ -30,7 +30,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
           final staticMethds = element.methods.where((e) => e.isStatic);
           final map = <MethodElement, RouteBuilderItemElement>{};
           for (var item in staticMethds) {
-            for (var metaElement in item.metadata) {
+            for (var metaElement in item.metadata.annotations) {
               final meta = metaElement.computeConstantValue();
               final metaName = meta?.type?.element?.name;
               if (isSameType<RouteBuilderItem>(metaName)) {
@@ -44,7 +44,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
               }
             }
           }
-          targetClassName = element.name;
+          targetClassName = element.name ?? '';
           mainElement = root;
           return generator(root, map.values.toList());
         }
@@ -153,7 +153,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   bool hasSuperType(Element? element, String name) {
     if (element is! InterfaceElement) return false;
     for (var parent in element.interfaces) {
-      return parent.element.displayName == name;
+      return parent.element.name == name;
     }
     return false;
   }
@@ -206,13 +206,13 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     final jsonKey = StringBuffer();
 
-    for (var item in element.parameters) {
+    for (var item in element.formalParameters) {
       if (!mainElement.genKey && item.name == 'key') {
         continue;
       }
 
-      final paramNote = getParamNote(item.metadata);
-      final itemName = paramNote.getName(item.name);
+      final paramNote = getParamNote(item.metadata.annotations);
+      final itemName = paramNote.getName(item.name ?? '');
       var paramFrom = paramNote.isQuery ? 'entry.queryParams' : 'entry.params';
 
       final requiredValue =
@@ -235,7 +235,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
         if (!item.type.isDartType) {
           final typeElement = item.type.element;
           final jsonFn = paramNote.fromJson ?? getFromJsonFn(typeElement);
-          final itemType = typeElement?.displayName;
+          final itemType = typeElement?.name ?? typeElement?.name;
           final isEnum = typeElement is EnumElement;
           if (jsonFn != null) {
             final fnCall = fnName(jsonFn);
@@ -250,7 +250,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
             final toJson = getToJsonFn(typeElement, name: paramNote.toJsonName);
             var toJsonValue = 'null';
             if (toJson != null && toJson.isStatic) {
-              toJsonValue = toJson.displayName;
+              toJsonValue = toJson.name ?? '';
             }
             if (itemType != null && !isEnum) {
               regFnBuffer.putIfAbsent(itemType, () => '($toJsonValue,)');
@@ -490,7 +490,7 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
   }
 
   RouteItemElement genItemElement(DartObject value) {
-    final metaName = value.type?.element?.displayName;
+    final metaName = value.type?.element?.name;
     assert(isSameType<RouterPage>(metaName));
     final name = value.getField('name')?.toStringValue();
     var page = value.getField('page')?.toTypeValue();
@@ -729,7 +729,7 @@ mixin Base {
     if (pageBuilderElement != null) return pageBuilderElement;
 
     for (var constructor in classElement!.constructors) {
-      if (constructor.name.isEmpty) {
+      if (constructor.name case var name? when name.isNotEmpty) {
         return constructor;
       }
     }
@@ -757,9 +757,9 @@ mixin Base {
     final element = getBuildFn();
     if (element == null) return null;
 
-    final allnames = element.parameters.map((e) {
-      final paramNote = getParamNote(e.metadata);
-      return paramNote.getName(e.name);
+    final allnames = element.formalParameters.map((e) {
+      final paramNote = getParamNote(e.metadata.annotations);
+      return paramNote.getName(e.name ?? '');
     });
 
     var name = defaultKey;
@@ -775,12 +775,12 @@ mixin Base {
     final element = getBuildFn();
     if (element == null) return '';
     final buffer = StringBuffer();
-    for (var item in element.parameters) {
-      final paramNote = getParamNote(item.metadata);
-      final name = paramNote.getName(item.name);
+    for (var item in element.formalParameters) {
+      final paramNote = getParamNote(item.metadata.annotations);
+      final name = paramNote.getName(item.name ?? '');
 
       if (name != item.name) {
-        final clsField = getMember(element, item.name);
+        final clsField = getMember(element, item.name ?? '');
         buffer.writeln('/// [$name] : [$clsField]');
       }
     }
