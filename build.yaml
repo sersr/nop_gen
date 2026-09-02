@@ -25,13 +25,13 @@ builders:
     auto_apply: dependents
     build_to: cache
     applies_builders: ["source_gen|combining_builder"]
-  nop_route:
-    import: "package:nop_gen/src/route_builder.dart"
-    builder_factories: ["routeMainBuilder"]
-    build_extensions: { ".dart": ["route_nop.g.part"] }
-    auto_apply: dependents
-    build_to: cache
-    applies_builders: ["source_gen|combining_builder"]
+  # nop_route:
+  #   import: "package:nop_gen/src/route_builder.dart"
+  #   builder_factories: ["routeMainBuilder"]
+  #   build_extensions: { ".dart": ["route_nop.g.part"] }
+  #   auto_apply: dependents
+  #   build_to: cache
+  #   applies_builders: ["source_gen|combining_builder"]
   nop_router:
     import: "package:nop_gen/src/router_builder.dart"
     builder_factories: ["routerMainBuilder"]

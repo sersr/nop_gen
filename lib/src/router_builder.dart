@@ -359,9 +359,9 @@ class RouterGenerator extends GeneratorForAnnotation<RouterMain> {
 
     if (base.allgroupList.isNotEmpty) {
       buf.write('useGroupId: true,');
-      parametersPosOrNamed.add('required $groupKey');
+      parametersPosOrNamed.add('required dynamic $groupKey');
     } else {
-      parametersPosOrNamed.add('$groupKey');
+      parametersPosOrNamed.add('dynamic $groupKey');
     }
 
     groupParam = ', groupId: $groupKey';
