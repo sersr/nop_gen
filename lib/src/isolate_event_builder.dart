@@ -43,8 +43,6 @@ class ClassItem {
 
   final supers = <ClassItem>[];
   bool separate = false;
-  bool voidGen = false;
-
   String messagerType = '';
   final methods = <Methods>[];
   String serverName = '';
@@ -63,13 +61,6 @@ class Methods {
   final parameters = <String>[];
   final parametersMessageList = <String>[];
   final parametersNamedUsed = <String>[];
-
-  bool isField = false;
-
-  String get sendName {
-    if (isField) return '${name}Field';
-    return name ?? '';
-  }
 
   bool unique = false;
   bool cached = false;
@@ -91,8 +82,8 @@ class Methods {
       final itemElement = reader.findType(itemNotNull);
 
       if (itemElement is ClassElement) {
-        useSameReturnType = itemElement.allSupertypes
-            .any((element) => element.element.name!.contains(currentItem));
+        useSameReturnType = itemElement.allSupertypes.any((element) => element
+            .element.name!.contains(currentItem));
       }
       name = useSameReturnType
           ? returnType.toString()
@@ -270,7 +261,7 @@ class ServerEventGeneratorForAnnotation
     var dynamicFunction = StringBuffer();
 
     final lowServerName = getDartMemberName(item.serverName);
-    print('...${item.serverName}');
+
     if (funcs.isEmpty) return buffer.toString();
 
     /// ------------ Resolve -------------------------------------
@@ -282,23 +273,18 @@ class ServerEventGeneratorForAnnotation
     list.add(su);
 
     impl = list.join(',');
-    if (item.voidGen) {
-      impl = '';
-    }
 
     final closureBuffer = <String>[];
-    final voidGenBuffer = <String>[];
     for (var f in funcs) {
       var parasOp = f.parametersNamedUsed.join(',');
-      var paras = f.parametersMessageList.length == 1 && parasOp.isEmpty
+      var paras = f.parameters.length == 1 && parasOp.isEmpty
           ? 'args'
-          : List.generate(
-              f.parametersMessageList.length - f.parametersNamedUsed.length,
+          : List.generate(f.parameters.length - f.parametersNamedUsed.length,
               (index) => 'args[$index]').join(',');
       if (paras.isNotEmpty && parasOp.isNotEmpty) {
         parasOp = ',$parasOp';
       }
-      final tranName = f.useDynamic ? '${f.name}Dynamic' : f.sendName;
+      final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
       if (f.useTransferType) {
         const returnName = '';
         dynamicFunction.write(
@@ -311,44 +297,22 @@ class ServerEventGeneratorForAnnotation
       }
       final para = '$paras$parasOp';
       if (para == 'args') {
-        closureBuffer.add(tranName);
+        closureBuffer.add('$tranName');
       } else {
         closureBuffer.add('(args) => $tranName($para)');
       }
-      if (f.isField) {
-        final returnType =
-            (f.useTransferType || !f.isDynamic) ? f.returnType : 'dynamic';
-        final tranName = (f.useTransferType || !f.isDynamic)
-            ? f.sendName
-            : '${f.name}Dynamic';
-
-        var parasOp = f.parametersNamedUsed.join(',');
-        var paras = f.parametersMessageList.join(',');
-        if (paras.isNotEmpty && parasOp.isNotEmpty) {
-          parasOp = ',$parasOp';
-        }
-        final para = '$paras$parasOp';
-
-        voidGenBuffer.add('''$returnType $tranName(${f.parameters.join(',')}) {
-      for (var listener in listeners) {
-        listener.${f.name}($para);
-      }
-      ain
-      }''');
-      }
     }
-    if (impl.isNotEmpty) {
-      impl = 'implements $impl';
-    }
-    buffer.write('mixin ${item.className}Resolve $impl {\n');
-    if (item.voidGen) {
-      buffer.write('List<${item.className}> get listeners;');
-      buffer.writeAll(voidGenBuffer);
-    }
+    buffer.write(
+        'mixin ${item.className}Resolve on Resolve implements $impl {\n');
     buffer.writeln('''
-           Type get protocol => ${item.messagerType}Message;
-            Map<Type,List<Function>> functionMap() {
-              return {${item.messagerType}Message: $closureBuffer};
+            Map<String, List<Type>> getResolveProtocols()  {
+              return super.getResolveProtocols()
+            ..putIfAbsent('$lowServerName',()=> []).add(${item.messagerType}Message);
+            }
+            Map<Type,List<Function>> resolveFunctionIterable() {
+              return super.resolveFunctionIterable()
+              ..[${item.messagerType}Message]= $closureBuffer;
+             
             }
         ''');
 
@@ -356,17 +320,15 @@ class ServerEventGeneratorForAnnotation
     buffer.writeln('\n}\n');
 
     /// --------------------- Messager -----------------------\
-    var implM = '';
-    if (item.voidGen) {
-      implM = 'implements ${item.className}';
-    }
     buffer.write('''
         /// implements [${item.className}]
-        mixin ${item.className}Messager $implM {
-          Messager get messager;
+        mixin ${item.className}Messager on SendEvent,Messager {
           String get $lowServerName => '$lowServerName';
-          Type get protocol => ${item.messagerType}Message;
-        Map<String,List<Type>> get protocolMap => {'$lowServerName': [${item.messagerType}Message]};
+          Map<String,List<Type>> getProtocols() {
+            return super.getProtocols()
+            ..putIfAbsent($lowServerName,()=> []).add(${item.messagerType}Message);
+
+          }
         ''');
     for (var e in funcs) {
       final returnType =
@@ -374,33 +336,20 @@ class ServerEventGeneratorForAnnotation
       final tranName =
           (e.useTransferType || !e.isDynamic) ? e.name : '${e.name}Dynamic';
 
-      if (e.isField) {
-
-      buffer.write('late var $tranName = (${e.parameters.join(',')})');
-      } else {
-
       buffer.write('$returnType $tranName(${e.parameters.join(',')})');
-      }
       final para = e.parametersMessageList.isEmpty
           ? 'null'
           : e.parametersMessageList.length == 1 && !e.hasNamed
               ? e.parametersMessageList.first
               : e.parametersMessageList;
       final eRetureType = e.returnType!;
-      final isVoid = eRetureType is VoidType && item.voidGen;
-      if (eRetureType.isDartAsyncFuture ||
-          eRetureType.isDartAsyncFutureOr ||
-          isVoid) {
-        final ret = isVoid ? '' : 'return';
+      if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
         if (useOption(eRetureType.toString(), reader)) {
           buffer.write(
-              ' {$ret messager.sendOption(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);}');
+              ' {return sendOption(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);');
         } else {
           buffer.write(
-              ' {$ret messager.sendMessage(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);}');
-        }
-        if (e.isField) {
-          buffer.write(';');
+              ' {return sendMessage(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);');
         }
       } else if (eRetureType.toString() == 'Stream' ||
           eRetureType.toString().startsWith('Stream<')) {
@@ -418,10 +367,11 @@ class ServerEventGeneratorForAnnotation
         list.add('serverName: $lowServerName');
         named = ',${list.join(',')}';
         buffer.write(
-            '{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);}');
+            '{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
       } else {
-        buffer.write(';');
+        buffer.write('{');
       }
+      buffer.write('}');
     }
     buffer.write('}');
 
@@ -567,7 +517,6 @@ class ServerEventGeneratorForAnnotation
     final supers = getSuperNames(group);
 
     var supersResolve = supers.map((e) => '${e}Resolve').join(',');
-
     supersResolve = supersResolve.isNotEmpty ? ',$supersResolve' : '';
     var connectToOthers = '';
 
@@ -669,7 +618,6 @@ class ServerEventGeneratorForAnnotation
         final separate = meta?.getField('separate')?.toBoolValue();
         generate = meta?.getField('generate')?.toBoolValue() ?? generate;
         final serverName = meta?.getField('serverName')?.toStringValue();
-        final voidGen = meta?.getField('voidGen')?.toBoolValue();
         final connectToServer =
             meta?.getField('connectToServer')?.toListValue();
         // final privateProtocols = meta
@@ -678,7 +626,7 @@ class ServerEventGeneratorForAnnotation
         //     ?.map((e) => e.toTypeValue()?.element)
         //     .whereType<Element>();
         final isLocal = meta?.getField('isLocal')?.toBoolValue();
-        item.voidGen = voidGen ?? false;
+
         if (messageName != null &&
             separate != null &&
             serverName != null &&
@@ -742,83 +690,9 @@ class ServerEventGeneratorForAnnotation
 
     item.className ??= element.name;
     if (item.messagerType.isEmpty) {
-      item.messagerType = element.name ?? '';
-    }
-    final functionFields = element.fields.where((e) {
-      return e.type is FunctionType;
-    }).map((e) {
-      return (e, e.type as FunctionType);
-    });
-    for (var e in functionFields) {
-      final field = e.$1;
-      final methodElement = e.$2;
+      item.messagerType = element.name!;
 
-      final method = Methods();
-
-      method.name = field.name;
-      if (field.name!.startsWith('_')) {
-        continue;
-      }
-      method.returnType = methodElement.returnType;
-
-      final parameters = <String>[];
-      final parametersMessage = <String>[];
-      final parametersPosOrNamed = <String>[];
-      final parametersNamedUsed = <String>[];
-      var count = -1;
-      for (var item in methodElement.formalParameters) {
-        count++;
-        parametersMessage.add(item.name ?? '');
-        final requiredValue = item.isRequiredNamed ? 'required ' : '';
-        final defaultValue =
-            item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
-        final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
-
-        if (item.isOptionalPositional) {
-          parametersPosOrNamed.add(fot);
-          continue;
-        } else if (item.isNamed) {
-          parametersPosOrNamed.add(fot);
-          method.hasNamed = true;
-          parametersNamedUsed.add('${item.name}: args[$count]');
-          continue;
-        }
-        parameters.add(fot);
-      }
-
-      method.parameters.addAll(parameters);
-      if (parametersPosOrNamed.isNotEmpty) {
-        if (method.hasNamed) {
-          method.parameters.add('{${parametersPosOrNamed.join(',')}}');
-        } else {
-          method.parameters.add('[${parametersPosOrNamed.join(',')}]');
-        }
-      }
-      method.parametersMessageList.addAll(parametersMessage);
-      method.parametersNamedUsed.addAll(parametersNamedUsed);
-
-      field.metadata.annotations.any((element) {
-        final data = element.computeConstantValue();
-        final type = data?.type?.element?.name;
-        if (type == 'NopServerMethod') {
-          final isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
-          final useTransferType =
-              data?.getField('useTransferType')?.toBoolValue() ?? false;
-          final unique = data?.getField('unique')?.toBoolValue() ?? false;
-          final cached = data?.getField('cached')?.toBoolValue() ?? false;
-          method
-            ..isDynamic = isDynamic
-            ..useTransferType = useTransferType
-            ..unique = unique
-            ..cached = cached;
-
-          return true;
-        }
-        return false;
-      });
-      method.getReturnNameTransferType(reader);
-      method.isField = true;
-      item.methods.add(method);
+      element.fields;
     }
 
     for (var methodElement in element.methods) {
