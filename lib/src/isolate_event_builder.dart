@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
+import 'package:pub_semver/pub_semver.dart';
 import 'package:build/build.dart';
 import 'package:nop_annotations/nop_annotations.dart';
 import 'package:source_gen/source_gen.dart';
@@ -39,6 +40,7 @@ class ServerGroup {
 
 class ClassItem {
   String? className;
+  Element? classElement;
   ClassItem? parent;
 
   final supers = <ClassItem>[];
@@ -47,9 +49,28 @@ class ClassItem {
   final methods = <Methods>[];
   String serverName = '';
   List<String> connectToServer = const [];
+  List<DartType> connectToServerRaw = const [];
   // List<ClassItem> privateProtocols = const [];
   bool isProtocols = false;
-  bool isLocal = false;
+  // bool isLocal = false;
+
+  List<Methods> getMethods() {
+    final methods = <Methods>[];
+    methods.addAll(this.methods);
+    if (!separate) {
+      methods.addAll(supers.expand((e) => e.getMethods()));
+    }
+    return methods;
+  }
+
+  bool canGenerate() {
+    if (separate) {
+      return methods.isNotEmpty;
+    } else {
+      return getMethods().isNotEmpty;
+    }
+  }
+
   @override
   String toString() {
     return '$className';
@@ -68,9 +89,11 @@ class Methods {
   bool hasNamed = false;
 
   DartType? returnType;
-  bool isDynamic = false;
   bool useTransferType = false;
-  bool get useDynamic => isDynamic || (useTransferType && !useSameReturnType);
+
+  FunctionTypedElement? transferType;
+
+  bool get useDynamic => (useTransferType && !useSameReturnType);
   bool useSameReturnType = false;
   String? _getReturnNameTransferType;
   String replace(String prefex, String source, LibraryReader reader) {
@@ -82,8 +105,9 @@ class Methods {
       final itemElement = reader.findType(itemNotNull);
 
       if (itemElement is ClassElement) {
-        useSameReturnType = itemElement.allSupertypes.any((element) => element
-            .element.name!.contains(currentItem));
+        useSameReturnType = itemElement.allSupertypes.any(
+          (element) => element.element.name!.contains(currentItem),
+        );
       }
       name = useSameReturnType
           ? returnType.toString()
@@ -108,10 +132,8 @@ class Methods {
 
     return _getReturnNameTransferType =
         useTransferType && returnTypeName.isNotEmpty
-            ? returnTypeName
-            : isDynamic
-                ? 'dynamic'
-                : returnType.toString();
+        ? returnTypeName
+        : returnType.toString();
   }
 
   @override
@@ -127,15 +149,30 @@ bool useOption(String source, LibraryReader reader) {
 class ServerEventGeneratorForAnnotation
     extends GeneratorForAnnotation<NopServerEvent> {
   late LibraryReader reader;
+
+  static final version313 = Version(3, 13, 0);
+
+  bool get support313 {
+    return Version.prioritize(langVersion, version313) >= 0;
+  }
+
+  Version get langVersion {
+    return reader.element.languageVersion.effective;
+  }
+
   @override
   FutureOr<String> generate(LibraryReader library, BuildStep buildStep) async {
     reader = library;
+
     return super.generate(library, buildStep);
   }
 
   @override
   String generateForAnnotatedElement(
-      Element element, ConstantReader annotation, BuildStep buildStep) {
+    Element element,
+    ConstantReader annotation,
+    BuildStep buildStep,
+  ) {
     if (element is ClassElement) {
       final root = gen(element);
 
@@ -164,8 +201,10 @@ class ServerEventGeneratorForAnnotation
     defaultName = root.serverName;
 
     final buffer = StringBuffer();
-    buffer.writeln('// ignore_for_file: annotate_overrides\n'
-        '// ignore_for_file: curly_braces_in_flow_control_structures');
+    buffer.writeln(
+      '// ignore_for_file: annotate_overrides\n'
+      '// ignore_for_file: curly_braces_in_flow_control_structures',
+    );
     buffer.write(writeMessageEnum(root, true));
 
     final multiItems = <String, ServerGroup>{};
@@ -183,20 +222,25 @@ class ServerEventGeneratorForAnnotation
       // }
 
       final group = multiItems.putIfAbsent(
-          item.serverName, () => ServerGroup(item.serverName));
+        item.serverName,
+        () => ServerGroup(item.serverName),
+      );
       if (!group.currentItems.any(
-          (e) => e != root && !e.separate && getAllSupers(e).contains(item))) {
+        (e) => e != root && !e.separate && getAllSupers(e).contains(item),
+      )) {
         group.addCurerntItem(item);
       }
       // item.privateProtocols.forEach(group.addCurerntItem);
-      final connectTo = item.connectToServer;
-      for (var connectToServerName in connectTo) {
-        if (connectToServerName == item.serverName) continue;
-        final other = multiItems.putIfAbsent(
-            connectToServerName, () => ServerGroup(connectToServerName));
-        other.addConnect(item);
-        group.addConnectToGroup(other);
-      }
+      // final connectTo = item.connectToServer;
+      // for (var connectToServerName in connectTo) {
+      //   if (connectToServerName == item.serverName) continue;
+      //   final other = multiItems.putIfAbsent(
+      //     connectToServerName,
+      //     () => ServerGroup(connectToServerName),
+      //   );
+      //   other.addConnect(item);
+      //   group.addConnectToGroup(other);
+      // }
 
       for (var element in item.supers) {
         add(element);
@@ -204,35 +248,65 @@ class ServerEventGeneratorForAnnotation
     }
 
     add(root);
+
+    void resolveConnection(ClassItem item) {
+      if (item.connectToServerRaw.isNotEmpty) {
+        item.connectToServer = item.connectToServerRaw
+            .map((e) {
+              final name = e.element;
+              if (name == null) return null;
+              for (var server in multiItems.entries) {
+                if (server.value.currentItems.any(
+                  (e) => e.classElement == name,
+                )) {
+                  return server.key;
+                }
+              }
+              return null;
+            })
+            .whereType<String>()
+            .toList();
+
+        final group = multiItems.putIfAbsent(
+          item.serverName,
+          () => ServerGroup(item.serverName),
+        );
+
+        final connectTo = item.connectToServer;
+        for (var connectToServerName in connectTo) {
+          if (connectToServerName == item.serverName) continue;
+          final other = multiItems.putIfAbsent(
+            connectToServerName,
+            () => ServerGroup(connectToServerName),
+          );
+          other.addConnect(item);
+          group.addConnectToGroup(other);
+        }
+      }
+
+      for (var element in item.supers) {
+        resolveConnection(element);
+      }
+    }
+
+    resolveConnection(root);
+
     final allItems = <ClassItem>[];
 
     allItems.addAll(root.supers.expand((element) => getTypes(element)));
     if (root.methods.isNotEmpty) {
       allItems.addAll(getTypes(root));
     }
-    var hasLocal = false;
-    var allItemsMessager = allItems.map((e) {
-      hasLocal |= e.isLocal;
-      return e.isLocal ? '${e.className}Resolve' : '${e.className}Messager';
-    }).join(',');
-    allItemsMessager =
-        hasLocal ? 'Resolve,$allItemsMessager' : allItemsMessager;
-    final rootMessager =
-        '${allItemsMessager.isNotEmpty ? ',' : ''} $allItemsMessager';
-    buffer
-      ..write(genMulitServer(multiItems.values.toList(), rootMessager))
-      ..write(writeItems(root, true));
 
+    // buffer
+    //   // ..write(genMultiServer(multiItems.values.toList()))
+    //   ..write(writeItems(root, true));
+    buffer.write(writeItems(root, true));
     return buffer.toString();
   }
 
   List<Methods> getMethods(ClassItem item) {
-    final methods = <Methods>[];
-    methods.addAll(item.methods);
-    if (!item.separate) {
-      methods.addAll(item.supers.expand((e) => getMethods(e)));
-    }
-    return methods;
+    return item.getMethods();
   }
 
   List<String?> getSupers(ClassItem item) {
@@ -245,7 +319,11 @@ class ServerEventGeneratorForAnnotation
   }
 
   /// 生成`Messager`、`Resolve`
-  String writeItems(ClassItem item, [bool root = false]) {
+  String writeItems(
+    ClassItem item, [
+    bool root = false,
+    bool writeProtocolFns = false,
+  ]) {
     final buffer = StringBuffer();
     final funcs = <Methods>{};
     final supers = <String>{};
@@ -258,9 +336,11 @@ class ServerEventGeneratorForAnnotation
       supers.addAll(getSupers(item).whereType<String>());
     }
 
-    var dynamicFunction = StringBuffer();
+    // var dynamicFunction = StringBuffer();
 
     final lowServerName = getDartMemberName(item.serverName);
+
+    final itemName = getDartMemberName(item.className ?? '');
 
     if (funcs.isEmpty) return buffer.toString();
 
@@ -269,87 +349,94 @@ class ServerEventGeneratorForAnnotation
     final list = <String>[];
 
     final su = supers.isEmpty ? '${item.className}' : supers.join(',');
-    var impl = '';
-    list.add(su);
 
-    impl = list.join(',');
+    list.add(su);
 
     final closureBuffer = <String>[];
     for (var f in funcs) {
       var parasOp = f.parametersNamedUsed.join(',');
       var paras = f.parameters.length == 1 && parasOp.isEmpty
           ? 'args'
-          : List.generate(f.parameters.length - f.parametersNamedUsed.length,
-              (index) => 'args[$index]').join(',');
+          : List.generate(
+              f.parameters.length - f.parametersNamedUsed.length,
+              (index) => 'args.\$${index + 1}',
+            ).join(',');
       if (paras.isNotEmpty && parasOp.isNotEmpty) {
         parasOp = ',$parasOp';
       }
-      final tranName = f.useDynamic ? '${f.name}Dynamic' : f.name;
-      if (f.useTransferType) {
-        const returnName = '';
-        dynamicFunction.write(
-            '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("unused function");');
-      }
-      if (f.useDynamic) {
-        final name = f.getReturnNameTransferType(reader);
-        dynamicFunction
-            .write('$name ${f.name}Dynamic(${f.parameters.join(',')});');
-      }
+      final tranName = f.name;
+      // if (f.useTransferType) {
+      // const returnName = '';
+      // dynamicFunction.write(
+      //   '$returnName${f.name}(${f.parameters.join(',')}) => throw NopUseDynamicVersionExection("unused function");',
+      // );
+      // }
+      // if (f.useDynamic) {
+      // final name = f.getReturnNameTransferType(reader);
+      // dynamicFunction.write(
+      //   '$name ${f.name}Dynamic(${f.parameters.join(',')});',
+      // );
+      // }
+
       final para = '$paras$parasOp';
-      if (para == 'args') {
-        closureBuffer.add('$tranName');
+
+      if (f.transferType case var fn?) {
+        final prefix = fn.enclosingElement?.displayName.isNotEmpty == true
+            ? '${fn.enclosingElement?.displayName}.'
+            : '';
+        closureBuffer.add(
+          '(args) => $itemName.$tranName($para).then($prefix${fn.name})',
+        );
+      } else if (para == 'args') {
+        closureBuffer.add('$itemName.$tranName');
       } else {
-        closureBuffer.add('(args) => $tranName($para)');
+        closureBuffer.add('(args) => $itemName.$tranName($para)');
       }
     }
-    buffer.write(
-        'mixin ${item.className}Resolve on Resolve implements $impl {\n');
-    buffer.writeln('''
-            Map<String, List<Type>> getResolveProtocols()  {
-              return super.getResolveProtocols()
-            ..putIfAbsent('$lowServerName',()=> []).add(${item.messagerType}Message);
-            }
-            Map<Type,List<Function>> resolveFunctionIterable() {
-              return super.resolveFunctionIterable()
-              ..[${item.messagerType}Message]= $closureBuffer;
-             
-            }
-        ''');
 
-    buffer.write(dynamicFunction);
-    buffer.writeln('\n}\n');
+    if (writeProtocolFns) {
+      return closureBuffer.toString();
+    }
+
+    // final serverNname = 'serverName';
+    final messager = 'messager';
+    final protocol = '${item.messagerType}Message';
 
     /// --------------------- Messager -----------------------\
     buffer.write('''
         /// implements [${item.className}]
-        mixin ${item.className}Messager on SendEvent,Messager {
-          String get $lowServerName => '$lowServerName';
-          Map<String,List<Type>> getProtocols() {
-            return super.getProtocols()
-            ..putIfAbsent($lowServerName,()=> []).add(${item.messagerType}Message);
-
-          }
+        final class ${item.className}Messager extends MessageItem with  ${item.className}MessagerMixin implements ${item.className} {
+          ${item.className}Messager();
+        }
         ''');
+    buffer.write('''
+
+        /// implements [${item.className}]
+        mixin ${item.className}MessagerMixin implements ${item.className} {
+          final Type protocol = ${item.messagerType}Message;
+          Messager get messager;
+        ''');
+
     for (var e in funcs) {
-      final returnType =
-          (e.useTransferType || !e.isDynamic) ? e.returnType : 'dynamic';
-      final tranName =
-          (e.useTransferType || !e.isDynamic) ? e.name : '${e.name}Dynamic';
+      final returnType = e.returnType;
+      final tranName = e.name;
 
       buffer.write('$returnType $tranName(${e.parameters.join(',')})');
       final para = e.parametersMessageList.isEmpty
           ? 'null'
           : e.parametersMessageList.length == 1 && !e.hasNamed
-              ? e.parametersMessageList.first
-              : e.parametersMessageList;
+          ? e.parametersMessageList.first
+          : '(${e.parametersMessageList.join(',')})';
       final eRetureType = e.returnType!;
       if (eRetureType.isDartAsyncFuture || eRetureType.isDartAsyncFutureOr) {
         if (useOption(eRetureType.toString(), reader)) {
           buffer.write(
-              ' {return sendOption(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);');
+            ' {return $messager.sendOption(${item.messagerType}Message.${e.name},$para,protocol:$protocol);',
+          );
         } else {
           buffer.write(
-              ' {return sendMessage(${item.messagerType}Message.${e.name},$para,serverName:$lowServerName);');
+            ' {return $messager.sendMessage(${item.messagerType}Message.${e.name},$para,protocol:$protocol);',
+          );
         }
       } else if (eRetureType.toString() == 'Stream' ||
           eRetureType.toString().startsWith('Stream<')) {
@@ -364,10 +451,11 @@ class ServerEventGeneratorForAnnotation
         if (cached) {
           list.add('cached: true');
         }
-        list.add('serverName: $lowServerName');
+        list.add('protocol: protocol');
         named = ',${list.join(',')}';
         buffer.write(
-            '{return sendMessageStream(${item.messagerType}Message.${e.name},$para$named);');
+          '{return $messager.sendMessageStream(${item.messagerType}Message.${e.name},$para$named);',
+        );
       } else {
         buffer.write('{');
       }
@@ -382,26 +470,38 @@ class ServerEventGeneratorForAnnotation
   /// 生成多个[Server]mixins
   /// 初始化时检测协议匹配
   /// 子隔离之间通信实现，连接时检测协议
-  String genMulitServer(List<ServerGroup> groups, String rootMessager) {
+  String genMultiServer(List<ServerGroup> groups) {
     final buffer = StringBuffer();
     final defaultServer = groups[0];
     final upperServerName = getDartClassName(defaultServer.serverName);
     final create = StringBuffer();
     final connectTo = StringBuffer();
     final prot = StringBuffer();
+    final eventItems = <String>[];
+
     final genResolve = StringBuffer();
     final connectToLocal = StringBuffer();
 
     for (var group in groups) {
-      genConnectToServer(group, create, connectTo, connectToLocal, prot,
-          (serverName) {
-        return groups.firstWhere((element) => element.serverName == serverName);
-      });
+      genConnectToServer(
+        group,
+        create,
+        connectTo,
+        connectToLocal,
+        prot,
+        eventItems,
+        (serverName) {
+          return groups.firstWhere(
+            (element) => element.serverName == serverName,
+          );
+        },
+      );
       genServerResolve(group, genResolve);
     }
     String connectToBuffer = '';
     if (connectTo.isNotEmpty) {
-      connectToBuffer = '''
+      connectToBuffer =
+          '''
           void onResumeListen() {
             $connectToLocal
             $connectTo
@@ -416,7 +516,8 @@ class ServerEventGeneratorForAnnotation
 
     var protBuffer = '';
     if (prot.isNotEmpty) {
-      protBuffer = '''
+      protBuffer =
+          '''
           Map<String,RemoteServer> regRemoteServer() {
              return super.regRemoteServer()
             $prot;
@@ -426,9 +527,17 @@ class ServerEventGeneratorForAnnotation
 
     buffer.writeln('''
         /// 主入口
-        abstract class Multi${upperServerName}MessagerMain with ListenMixin, SendEventMixin, SendMultiServerMixin $rootMessager {
+        abstract class Multi${upperServerName}MessagerMain with ListenMixin, SendEventMixin, SendMultiServerMixin, Multi${upperServerName}MessagerMixin
+        
+        ${support313 ? ';' : "{}"}
+
+        mixin Multi${upperServerName}MessagerMixin on ListenMixin, SendEventMixin, SendMultiServerMixin {
           $create
+
           $protBuffer
+
+          late final List<EventItem> eventItems = $eventItems;
+
           $connectToBuffer
         }
         ''');
@@ -439,45 +548,56 @@ class ServerEventGeneratorForAnnotation
 
   // 生成与其他`serverName`连接的配置
   void genConnectToServer(
-      ServerGroup group,
-      StringBuffer create,
-      StringBuffer connectTo,
-      StringBuffer connectToLocal,
-      StringBuffer prot,
-      ServerGroup Function(String serverName) getGroup) {
+    ServerGroup group,
+    StringBuffer create,
+    StringBuffer connectTo,
+    StringBuffer connectToLocal,
+    StringBuffer prot,
+    List<String> eventItems,
+    ServerGroup Function(String serverName) getGroup,
+  ) {
     if (group.currentItems.isEmpty) {
       log.warning(
-          '\x1B[31merror: 没有找到 ${group.serverName} server, 可能是 connectToServers 拼写错误\x1B[00m');
+        '\x1B[31merror: 没有找到 ${group.serverName} server, 可能是 connectToServers 拼写错误\x1B[00m',
+      );
       return;
     }
-    final lowServerName = getDartMemberName(group.serverName);
-    final isLocal = group.currentItems.any((element) => element.isLocal);
-    if (!isLocal) {
-      prot.write('''..['$lowServerName'] = ${lowServerName}RemoteServer''');
-      create.write('RemoteServer get ${lowServerName}RemoteServer;');
-    }
+    final lowServer = getDartMemberName(group.serverName);
+    final lowServerName = '${lowServer}ServerName';
+    final events = group.currentItems
+        .where((e) => e.canGenerate())
+        .map((e) {
+          eventItems.add(getDartMemberName(e.className ?? ''));
+          return "late final ${getDartMemberName(e.className ?? '')} = ${e.className}Messager(messager: this, serverName: $lowServerName);";
+        })
+        .toList()
+        .join('\n');
+
+    create.write('''
+  String get $lowServerName => '$lowServer';
+  $events
+
+''');
+
+    create.write('RemoteServer get ${lowServer}RemoteServer;');
+    prot.write('''..[$lowServerName] = ${lowServer}RemoteServer''');
 
     var allDone = true;
+
     for (var item in group.connectToOthersGroup) {
       if (getGroup(item.serverName).currentItems.isEmpty) {
         log.warning('\x1B[31merror: 没有找到 ${item.serverName} 的 server\x1B[00m');
         allDone = false;
         continue;
       }
-      final hasLocal = item.currentItems.any((element) => element.isLocal);
-      final itemLow = getDartMemberName(item.serverName);
-      var localProt = '';
-      if (hasLocal) {
-        localProt = ''',localProt: localProts['$itemLow']''';
-        if (connectToLocal.isEmpty) {
-          connectToLocal.write('final localProts = getResolveProtocols();\n');
-        }
-      }
-      connectTo.write('''connect('$lowServerName','$itemLow'$localProt);''');
+
+      final itemLow = '${getDartMemberName(item.serverName)}ServerName';
+      connectTo.write('''connect($lowServerName, $itemLow);''');
     }
     if (!allDone) {
       log.warning(
-          '\x1B[31merror: 无法完成连接配置, 请检查 [${group.currentItems.join(', ')}] 的 connectToServers\x1B[00m');
+        '\x1B[31merror: 无法完成连接配置, 请检查 [${group.currentItems.join(', ')}] 的 connectToServers\x1B[00m',
+      );
     }
   }
 
@@ -511,7 +631,8 @@ class ServerEventGeneratorForAnnotation
   }
 
   void genServerResolve(ServerGroup group, StringBuffer resolveMain) {
-    final lowServerName = getDartMemberName(group.serverName);
+    final lowServer = getDartMemberName(group.serverName);
+    final lowServerName = '${lowServer}ServerName';
     final upperServerName = getDartClassName(group.serverName);
 
     final supers = getSuperNames(group);
@@ -524,30 +645,41 @@ class ServerEventGeneratorForAnnotation
       // 要连接其他 `server` 需要 mixin [ResolveMultiRecievedMixin]
       connectToOthers =
           ',SendEventMixin,SendCacheMixin,ResolveMultiRecievedMixin';
-      final buffer = StringBuffer();
       final allGroupSupers = <String>{};
       for (var item in group.connectToOthersGroup) {
         final supers = getSuperNames(item);
         allGroupSupers.addAll(supers);
       }
-      var supersMessager = allGroupSupers.map((e) => '${e}Messager').join(',');
+    }
 
-      buffer.write(supersMessager);
-      if (buffer.isNotEmpty) {
-        connectToOthers = '$connectToOthers,$buffer';
-      }
+    final eventGets = <String>[];
+    final resolveItems = <String>[];
+    final events = group.currentItems.where((e) => e.canGenerate()).toList();
+
+    for (var item in events) {
+      eventGets.add(
+        "${getDartClassName(item.className ?? '')} get ${getDartMemberName(item.className ?? '')};",
+      );
+      resolveItems.add(
+        "ResolveItem(protocol: ${item.messagerType}Message, protocolFns: ${writeItems(item, false, true)})",
+      );
     }
 
     resolveMain.write('''
         /// $lowServerName Server
-        abstract class Multi${upperServerName}ResolveMain  with
+        abstract class Multi${upperServerName}ResolveMain with
           ListenMixin,
-          Resolve
+          Resolve 
           $connectToOthers
-          $supersResolve {
+          {
         Multi${upperServerName}ResolveMain({required ServerConfigurations configurations})
           : remoteSendHandle = configurations.sendHandle;
           final SendHandle remoteSendHandle;
+
+
+          final String $lowServerName = '$lowServer';
+          ${eventGets.join('\n')}
+          late final resolveItems = $resolveItems;
           }
         ''');
   }
@@ -570,7 +702,6 @@ class ServerEventGeneratorForAnnotation
         list.add(item);
       }
     }
-    // _list.addAll(item.privateProtocols.expand((e) => getTypes(e)));
 
     return list.toList();
   }
@@ -580,19 +711,48 @@ class ServerEventGeneratorForAnnotation
 
     final funcs = <String>{};
     funcs.addAll(item.methods.map((e) => e.name!));
-    // buffer.writeAll(item.privateProtocols.map((e) => writeMessageEnum(e)));
+
     if (root || item.separate) {
       buffer.writeAll(item.supers.map((e) => writeMessageEnum(e)));
     } else {
       funcs.addAll(item.supers.expand((e) => e.methods.map((e) => e.name!)));
     }
-    // _funcs.addAll(item.privateProtocols
-    //     .expand((element) => getMethods(element).map((e) => e.name!)));
+
     if (funcs.isNotEmpty) {
+      final lowName = getDartMemberName(item.className ?? '');
       buffer
         ..write('enum ${item.messagerType}Message {\n')
-        ..write(funcs.join(','))
-        ..write('\n}\n');
+        ..write(funcs.join(','));
+      buffer.write(';');
+
+      buffer.write(
+        "static ResolveItem getResolve({required ${item.messagerType} $lowName, TaskCallback? onInit, TaskCallback? onClose}) {"
+        "return ResolveItem(onInit: onInit, onClose: onClose, protocol: ${item.messagerType}Message, protocolFns: ${writeItems(item, false, true)});"
+        "}",
+      );
+
+      buffer.write('''
+static IsolateRunner<${item.messagerType}Messager> getMessage(
+  RemoteServer remoteServer,
+  ) {
+    return IsolateRunner(
+      remoteServer: remoteServer,
+      messageItem: ${item.messagerType}Messager()
+      );
+    }
+''');
+      buffer.write('''
+static ${item.messagerType}Messager getResolveMessage(
+  IsolateResolve resolve,
+  ) {
+
+    final messager = ${item.messagerType}Messager();
+    resolve.connectToMessager(messager);
+    return messager;
+    }
+''');
+
+      buffer.write('\n}\n');
     }
     return buffer.toString();
   }
@@ -609,86 +769,63 @@ class ServerEventGeneratorForAnnotation
     final item = ClassItem();
     item.parent = parent;
 
-    bool generate = true;
+    // bool generate = true;
     element.metadata.annotations.any((e) {
       final meta = e.computeConstantValue();
       final type = meta?.type?.element?.name;
       if (isSameType<NopServerEventItem>(type)) {
         final messageName = meta?.getField('messageName')?.toStringValue();
         final separate = meta?.getField('separate')?.toBoolValue();
-        generate = meta?.getField('generate')?.toBoolValue() ?? generate;
+        // generate = meta?.getField('generate')?.toBoolValue() ?? generate;
         final serverName = meta?.getField('serverName')?.toStringValue();
-        final connectToServer =
-            meta?.getField('connectToServer')?.toListValue();
-        // final privateProtocols = meta
-        //     ?.getField('privateProtocols')
-        //     ?.toListValue()
-        //     ?.map((e) => e.toTypeValue()?.element)
-        //     .whereType<Element>();
-        final isLocal = meta?.getField('isLocal')?.toBoolValue();
+        final connectToServer = meta
+            ?.getField('connectToServer')
+            ?.toListValue();
 
         if (messageName != null &&
             separate != null &&
             serverName != null &&
-            isLocal != null &&
+            // isLocal != null &&
             connectToServer != null) {
           if (!item.separate) item.separate = separate;
           item.serverName = getDartMemberName(serverName);
-          item.isLocal = isLocal;
-          if ((parent == null || item.serverName.isNotEmpty) &&
-              connectToServer.isNotEmpty) {
-            item.connectToServer = connectToServer
-                .map((e) => e.toStringValue())
-                .whereType<String>()
-                .map((e) => getDartMemberName(e))
+          // item.isLocal = isLocal;
+          if (connectToServer.isNotEmpty && item.serverName.isEmpty) {
+            item.serverName = getDartMemberName(element.name ?? '');
+          }
+          if (connectToServer.isNotEmpty) {
+            item.connectToServerRaw = connectToServer
+                .map((e) => e.toTypeValue())
+                .whereType<DartType>()
                 .toList();
           }
-          // if (privateProtocols?.isNotEmpty == true) {
-          // final privates = <ClassItem>{};
-          // for (var item in privateProtocols!) {
-          //   if (item is ClassElement) {
-          //     final curent = gen(item, null);
-          // final privateinterfaces = item.interfaces
-          //     .map((e) => gen(e.element, null))
-          //     .whereType<ClassItem>();
-
-          // final privatemixins = item.mixins
-          //     .map((e) => gen(e.element, null))
-          //     .whereType<ClassItem>();
-          // if (curent != null) {
-          // privates.add(curent);
-          // }
-          // privates
-          //   ..addAll(privateinterfaces)
-          //   ..addAll(privatemixins);
-          //   }
-          // }
-          // _item.privateProtocols = privates.toList();
-          // }
 
           if (messageName.isNotEmpty) item.messagerType = messageName;
           return true;
         }
       } else if (isSameType<NopServerEvent>(type)) {
-        // rootResolveName = meta?.getField('resolveName')?.toStringValue();
         item.separate = true;
       }
       return false;
     });
 
-    if (!generate) return null;
+    // if (!generate) return null;
 
     final ci = genSuperType(element);
     if (ci != null) item.supers.add(ci);
 
-    item.supers.addAll(element.interfaces
-        .map((e) => gen(e.element, item))
-        .whereType<ClassItem>());
+    item.supers.addAll(
+      element.interfaces
+          .map((e) => gen(e.element, item))
+          .whereType<ClassItem>(),
+    );
 
     item.supers.addAll(
-        element.mixins.map((e) => gen(e.element, item)).whereType<ClassItem>());
+      element.mixins.map((e) => gen(e.element, item)).whereType<ClassItem>(),
+    );
 
     item.className ??= element.name;
+    item.classElement = element;
     if (item.messagerType.isEmpty) {
       item.messagerType = element.name!;
 
@@ -715,8 +852,9 @@ class ServerEventGeneratorForAnnotation
         count++;
         parametersMessage.add(item.name ?? '');
         final requiredValue = item.isRequiredNamed ? 'required ' : '';
-        final defaultValue =
-            item.hasDefaultValue ? ' = ${item.defaultValueCode}' : '';
+        final defaultValue = item.hasDefaultValue
+            ? ' = ${item.defaultValueCode}'
+            : '';
         final fot = '$requiredValue${item.type} ${item.name}$defaultValue';
 
         if (item.isOptionalPositional) {
@@ -746,14 +884,17 @@ class ServerEventGeneratorForAnnotation
         final data = element.computeConstantValue();
         final type = data?.type?.element?.name;
         if (type == 'NopServerMethod') {
-          final isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
-          final useTransferType =
-              data?.getField('useTransferType')?.toBoolValue() ?? false;
+          // final isDynamic = data?.getField('isDynamic')?.toBoolValue() ?? false;
+          // final useTransferType =
+          //     data?.getField('useTransferType')?.toBoolValue() ?? false;
+          final transferType = data
+              ?.getField('transferType')
+              ?.toFunctionValue();
           final unique = data?.getField('unique')?.toBoolValue() ?? false;
           final cached = data?.getField('cached')?.toBoolValue() ?? false;
           method
-            ..isDynamic = isDynamic
-            ..useTransferType = useTransferType
+            ..useTransferType = transferType != null
+            ..transferType = transferType
             ..unique = unique
             ..cached = cached;
 
@@ -767,12 +908,11 @@ class ServerEventGeneratorForAnnotation
     }
     return item;
   }
-
-  // String? rootResolveName;
 }
 
-Builder isolateEventBuilder(BuilderOptions options) => SharedPartBuilder(
-    [ServerEventGeneratorForAnnotation()], 'nop_isolate_event');
+Builder isolateEventBuilder(BuilderOptions options) => SharedPartBuilder([
+  ServerEventGeneratorForAnnotation(),
+], 'nop_isolate_event');
 
 String getToCamel(String name) {
   return name.replaceAllMapped(RegExp('[_-]([A-Za-z]+)'), (match) {

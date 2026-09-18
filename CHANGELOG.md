@@ -1,3 +1,6 @@
+# 0.4.2
+* code refactoring: isolate_event
+
 # 0.3.1
 * use Element.name
 
