@@ -1,5 +1,5 @@
 import 'package:analyzer/dart/element/element.dart';
-import 'package:nop_annotations/nop_annotations.dart';
+import 'package:nop/nop.dart';
 
 bool isSameType<T>(String? name) {
   return getTypeString<T>() == name;
@@ -60,7 +60,12 @@ String getMember(ExecutableElement fn, String name) {
 
 class ParamNote {
   ParamNote(
-      this.name, this.isQuery, this.fromJson, this.toJson, this.toJsonName);
+    this.name,
+    this.isQuery,
+    this.fromJson,
+    this.toJson,
+    this.toJsonName,
+  );
   final String name;
   final bool isQuery;
   final ExecutableElement? fromJson;
