@@ -193,7 +193,7 @@ String genTableDb(
     ..write(
       'class $databaseTableName extends DatabaseTable<$userTableName, $databaseTableName> {\n',
     )
-    ..write('$databaseTableName(\$Database db) : super(db);\n')
+    ..write('$databaseTableName(super.db);\n')
     // getter: table
     ..write(writeOver)
     ..write('final table = \'$userTableName\';\n');
